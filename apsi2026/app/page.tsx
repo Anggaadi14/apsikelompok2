@@ -12,13 +12,19 @@ interface CPLData {
   courses: { code: string; name: string; sks: number; grade: number }[];
 }
 
-// Types for Semester Grades
+// Types for Semester Grades (Matched with new Figma screenshot details)
 interface CourseGrade {
   code: string;
   name: string;
   sks: number;
   semester: number;
-  gradeNumber: number;
+  uk1: number; // Tugas
+  uk2: number; // UTS
+  uk3: number; // UAS
+  uk4: number; // Partisipatif
+  uk5: number; // Proyek
+  nilaiAkhir: number;
+  nilaiSkala100: number;
   gradeLetter: string;
   cplMapped: string[];
 }
@@ -32,7 +38,7 @@ const cplListInitial: CPLData[] = [
     status: "tercapai",
     courses: [
       { code: "UNI101", name: "Pendidikan Pancasila", sks: 2, grade: 85 },
-      { code: "TIN102", name: "Etika Profesi Teknik Industri", sks: 2, grade: 79 },
+      { code: "TIO3002", name: "Pengantar Teknik Industri", sks: 2, grade: 80 },
     ],
   },
   {
@@ -42,8 +48,8 @@ const cplListInitial: CPLData[] = [
     score: 78,
     status: "belum_tercapai",
     courses: [
-      { code: "TIN103", name: "Kalkulus I", sks: 3, grade: 75 },
-      { code: "TIN104", name: "Fisika Dasar", sks: 3, grade: 81 },
+      { code: "TIO3102", name: "Kalkulus I", sks: 3, grade: 75.8 },
+      { code: "BIO3303", name: "Fisika Teknik Industri", sks: 2, grade: 71.9 },
     ],
   },
   {
@@ -53,8 +59,8 @@ const cplListInitial: CPLData[] = [
     score: 88,
     status: "tercapai",
     courses: [
-      { code: "TIN201", name: "Metodologi Penelitian", sks: 2, grade: 90 },
-      { code: "TIN202", name: "Statistika Industri I", sks: 3, grade: 86 },
+      { code: "TIO3401", name: "Metodologi Penelitian", sks: 2, grade: 90.1 },
+      { code: "TIO3201", name: "Statistika Industri I", sks: 3, grade: 86.5 },
     ],
   },
   {
@@ -64,8 +70,8 @@ const cplListInitial: CPLData[] = [
     score: 85,
     status: "tercapai",
     courses: [
-      { code: "TIN301", name: "Perencanaan dan Pengendalian Produksi", sks: 3, grade: 88 },
-      { code: "TIN302", name: "Desain Sistem Kerja & Ergonomi", sks: 4, grade: 82 },
+      { code: "TIO3301", name: "Perencanaan & Pengendalian Produksi", sks: 3, grade: 91.2 },
+      { code: "TIO3302", name: "Desain Sistem Kerja & Ergonomi", sks: 4, grade: 83.8 },
     ],
   },
   {
@@ -75,8 +81,8 @@ const cplListInitial: CPLData[] = [
     score: 75,
     status: "belum_tercapai",
     courses: [
-      { code: "TIN205", name: "Penelitian Operasional I", sks: 3, grade: 70 },
-      { code: "TIN206", name: "Analisa Keputusan", sks: 2, grade: 80 },
+      { code: "TIO3303", name: "Penelitian Operasional I", sks: 3, grade: 74.5 },
+      { code: "TIO3402", name: "Analisis Keputusan", sks: 2, grade: 87.0 },
     ],
   },
   {
@@ -94,8 +100,8 @@ const cplListInitial: CPLData[] = [
     score: 86,
     status: "tercapai",
     courses: [
-      { code: "TIN305", name: "Simulasi Komputer", sks: 3, grade: 92 },
-      { code: "TIN306", name: "Sistem Informasi Industri", sks: 3, grade: 80 },
+      { code: "TIO3303", name: "Simulasi Komputer", sks: 3, grade: 93.8 },
+      { code: "TIO3304", name: "Sistem Informasi Industri", sks: 3, grade: 84.5 },
     ],
   },
   {
@@ -113,8 +119,8 @@ const cplListInitial: CPLData[] = [
     score: 83,
     status: "tercapai",
     courses: [
-      { code: "UNI105", name: "Bahasa Inggris Akademik", sks: 2, grade: 85 },
-      { code: "TIN208", name: "Presentasi Teknis", sks: 2, grade: 81 },
+      { code: "BIO3305", name: "Kimia Dasar", sks: 2, grade: 84.1 },
+      { code: "BIO3306", name: "Praktikum Kimia Dasar", sks: 1, grade: 89.2 },
     ],
   },
   {
@@ -127,32 +133,38 @@ const cplListInitial: CPLData[] = [
   },
 ];
 
+// Exactly 19 courses as shown in the figma counter and matching student transcript
 const courseGradesInitial: CourseGrade[] = [
   // Semester 1
-  { code: "UNI101", name: "Pendidikan Pancasila", sks: 2, semester: 1, gradeNumber: 85, gradeLetter: "A", cplMapped: ["CPL 1"] },
-  { code: "TIN103", name: "Kalkulus I", sks: 3, semester: 1, gradeNumber: 75, gradeLetter: "B+", cplMapped: ["CPL 2"] },
-  { code: "TIN104", name: "Fisika Dasar", sks: 3, semester: 1, gradeNumber: 81, gradeLetter: "A", cplMapped: ["CPL 2"] },
-  { code: "UNI105", name: "Bahasa Inggris Akademik", sks: 2, semester: 1, gradeNumber: 85, gradeLetter: "A", cplMapped: ["CPL 9"] },
-  { code: "TIN101", name: "Pengantar Teknik Industri", sks: 2, semester: 1, gradeNumber: 80, gradeLetter: "A-", cplMapped: ["CPL 2"] },
+  { code: "BIO3303", name: "Fisika Teknik Industri", sks: 2, semester: 1, uk1: 0, uk2: 50, uk3: 50, uk4: 0, uk5: 0, nilaiAkhir: 71.90, nilaiSkala100: 71.90, gradeLetter: "B", cplMapped: ["CPL 2"] },
+  { code: "BIO3304", name: "Praktikum Fisika Industri", sks: 1, semester: 1, uk1: 0, uk2: 45, uk3: 45, uk4: 0, uk5: 0, nilaiAkhir: 67.60, nilaiSkala100: 67.60, gradeLetter: "B", cplMapped: ["CPL 2"] },
+  { code: "BIO3305", name: "Kimia Dasar", sks: 2, semester: 1, uk1: 0, uk2: 55, uk3: 55, uk4: 0, uk5: 0, nilaiAkhir: 84.10, nilaiSkala100: 84.10, gradeLetter: "A-", cplMapped: ["CPL 9"] },
+  { code: "BIO3306", name: "Praktikum Kimia Dasar", sks: 1, semester: 1, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 89.20, nilaiSkala100: 89.20, gradeLetter: "A", cplMapped: ["CPL 9"] },
+  { code: "TIO3102", name: "Kalkulus I", sks: 3, semester: 1, uk1: 10, uk2: 70, uk3: 75, uk4: 10, uk5: 0, nilaiAkhir: 75.80, nilaiSkala100: 75.80, gradeLetter: "B+", cplMapped: ["CPL 2"] },
   // Semester 2
-  { code: "TIN102", name: "Etika Profesi Teknik Industri", sks: 2, semester: 2, gradeNumber: 79, gradeLetter: "B+", cplMapped: ["CPL 1"] },
-  { code: "TIN202", name: "Statistika Industri I", sks: 3, semester: 2, gradeNumber: 86, gradeLetter: "A", cplMapped: ["CPL 3"] },
-  { code: "TIN206", name: "Analisa Keputusan", sks: 2, semester: 2, gradeNumber: 80, gradeLetter: "A-", cplMapped: ["CPL 5"] },
-  { code: "TIN207", name: "Gambar Teknik", sks: 2, semester: 2, gradeNumber: 78, gradeLetter: "B+", cplMapped: ["CPL 7"] },
+  { code: "TIO3001", name: "KALKULUS II", sks: 3, semester: 2, uk1: 0, uk2: 52, uk3: 52, uk4: 0, uk5: 0, nilaiAkhir: 80.20, nilaiSkala100: 80.20, gradeLetter: "B+", cplMapped: ["CPL 2"] },
+  { code: "TIO3002", name: "Pengantar Teknik Industri", sks: 2, semester: 2, uk1: 0, uk2: 80, uk3: 80, uk4: 0, uk5: 0, nilaiAkhir: 80.00, nilaiSkala100: 80.00, gradeLetter: "A-", cplMapped: ["CPL 1"] },
+  { code: "TIO3003", name: "Menggambar Teknik", sks: 2, semester: 2, uk1: 0, uk2: 78, uk3: 78, uk4: 0, uk5: 0, nilaiAkhir: 78.00, nilaiSkala100: 78.00, gradeLetter: "B+", cplMapped: ["CPL 7"] },
+  { code: "TIO3004", name: "Fisika Dasar II", sks: 3, semester: 2, uk1: 0, uk2: 72, uk3: 72, uk4: 0, uk5: 0, nilaiAkhir: 72.00, nilaiSkala100: 72.00, gradeLetter: "B", cplMapped: ["CPL 2"] },
+  { code: "TIO3005", name: "Material Teknik", sks: 2, semester: 2, uk1: 0, uk2: 85, uk3: 85, uk4: 0, uk5: 0, nilaiAkhir: 85.00, nilaiSkala100: 85.00, gradeLetter: "A", cplMapped: ["CPL 1"] },
   // Semester 3
-  { code: "TIN201", name: "Metodologi Penelitian", sks: 2, semester: 3, gradeNumber: 90, gradeLetter: "A", cplMapped: ["CPL 3"] },
-  { code: "TIN205", name: "Penelitian Operasional I", sks: 3, semester: 3, gradeNumber: 70, gradeLetter: "B", cplMapped: ["CPL 5"] },
-  { code: "TIN208", name: "Presentasi Teknis", sks: 2, semester: 3, gradeNumber: 81, gradeLetter: "A", cplMapped: ["CPL 9"] },
-  { code: "TIN302", name: "Desain Sistem Kerja & Ergonomi", sks: 4, semester: 3, gradeNumber: 82, gradeLetter: "A-", cplMapped: ["CPL 4"] },
+  { code: "TIO3201", name: "Statistika Industri I", sks: 3, semester: 3, uk1: 15, uk2: 88, uk3: 88, uk4: 10, uk5: 10, nilaiAkhir: 86.50, nilaiSkala100: 86.50, gradeLetter: "A", cplMapped: ["CPL 3"] },
+  { code: "TIO3202", name: "Mekanika Rekayasa", sks: 3, semester: 3, uk1: 10, uk2: 62, uk3: 62, uk4: 10, uk5: 0, nilaiAkhir: 64.00, nilaiSkala100: 64.00, gradeLetter: "C+", cplMapped: ["CPL 2"] },
+  { code: "TIO3203", name: "Teori Probabilitas", sks: 2, semester: 3, uk1: 0, uk2: 75, uk3: 75, uk4: 0, uk5: 0, nilaiAkhir: 75.00, nilaiSkala100: 75.00, gradeLetter: "B+", cplMapped: ["CPL 2"] },
+  { code: "TIO3204", name: "Psikologi Industri", sks: 2, semester: 3, uk1: 20, uk2: 82, uk3: 85, uk4: 15, uk5: 15, nilaiAkhir: 83.50, nilaiSkala100: 83.50, gradeLetter: "A-", cplMapped: ["CPL 9"] },
   // Semester 4
-  { code: "TIN301", name: "Perencanaan dan Pengendalian Produksi", sks: 3, semester: 4, gradeNumber: 88, gradeLetter: "A", cplMapped: ["CPL 4"] },
-  { code: "TIN305", name: "Simulasi Komputer", sks: 3, semester: 4, gradeNumber: 92, gradeLetter: "A", cplMapped: ["CPL 7"] },
-  { code: "TIN306", name: "Sistem Informasi Industri", sks: 3, semester: 4, gradeNumber: 80, gradeLetter: "A-", cplMapped: ["CPL 7"] },
+  { code: "TIO3301", name: "Perencanaan & Pengendalian Produksi", sks: 3, semester: 4, uk1: 20, uk2: 90, uk3: 92, uk4: 20, uk5: 20, nilaiAkhir: 91.20, nilaiSkala100: 91.20, gradeLetter: "A", cplMapped: ["CPL 4"] },
+  { code: "TIO3302", name: "Desain Sistem Kerja & Ergonomi", sks: 4, semester: 4, uk1: 15, uk2: 80, uk3: 82, uk4: 15, uk5: 25, nilaiAkhir: 83.80, nilaiSkala100: 83.80, gradeLetter: "A-", cplMapped: ["CPL 4"] },
+  { code: "TIO3303", name: "Penelitian Operasional I", sks: 3, semester: 4, uk1: 10, uk2: 72, uk3: 75, uk4: 10, uk5: 0, nilaiAkhir: 74.50, nilaiSkala100: 74.50, gradeLetter: "B", cplMapped: ["CPL 5"] },
+  { code: "TIO3304", name: "Sistem Informasi Industri", sks: 3, semester: 4, uk1: 20, uk2: 85, uk3: 85, uk4: 15, uk5: 20, nilaiAkhir: 84.50, nilaiSkala100: 84.50, gradeLetter: "A-", cplMapped: ["CPL 7"] },
+  // Semester 5
+  { code: "TIO3401", name: "Metodologi Penelitian", sks: 2, semester: 5, uk1: 15, uk2: 90, uk3: 92, uk4: 15, uk5: 15, nilaiAkhir: 90.10, nilaiSkala100: 90.10, gradeLetter: "A", cplMapped: ["CPL 3"] },
+  { code: "TIO3402", name: "Analisis Keputusan", sks: 2, semester: 5, uk1: 20, uk2: 88, uk3: 85, uk4: 20, uk5: 20, nilaiAkhir: 87.00, nilaiSkala100: 87.00, gradeLetter: "A", cplMapped: ["CPL 5"] },
 ];
 
 export default function Home() {
   // Navigation tabs: 'dashboard' | 'detail-cpl' | 'riwayat-nilai'
-  const [activeTab, setActiveTab] = useState<"dashboard" | "detail-cpl" | "riwayat-nilai">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "detail-cpl" | "riwayat-nilai">("riwayat-nilai"); // Default to riwayat-nilai for review
   const [activeSemesterDropdown, setActiveSemesterDropdown] = useState(false);
   const [selectedSemester, setSelectedSemester] = useState("Ganjil 2024/2025");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -162,8 +174,10 @@ export default function Home() {
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [highlightedStat, setHighlightedStat] = useState<string | null>(null);
 
-  // Riwayat Nilai Semester Filter
-  const [transcriptSemesterFilter, setTranscriptSemesterFilter] = useState<string>("all");
+  // Riwayat Nilai Search & Filter & Sort States
+  const [transcriptSearch, setTranscriptSearch] = useState("");
+  const [transcriptSemesterFilter, setTranscriptSemesterFilter] = useState("all");
+  const [transcriptSortBy, setTranscriptSortBy] = useState("semester-asc");
 
   // Detail CPL Active Expanded Card
   const [expandedCplCard, setExpandedCplCard] = useState<number | null>(null);
@@ -171,6 +185,7 @@ export default function Home() {
   // Simulation loading / Download actions
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
 
   // Trigger custom toast message
@@ -200,7 +215,6 @@ export default function Home() {
             setIsDownloading(false);
             triggerToast("Laporan CPL berhasil diunduh!", "success");
             
-            // Create a pseudo download file link
             const reportData = `SICPL - PORTAL MAHASISWA\n=========================\nLaporan Capaian Pembelajaran Lulusan (CPL)\n\nMahasiswa: Ahmad Fadli\nNIM: I0320045\nProdi: Teknik Industri UNS\nIPK Kumulatif: 3.75\n\nRingkasan CPL:\n- CPL Tercapai: 6/10\n- Belum Tercapai: 2/10\n- Belum Ditempuh: 2/10\n- Rata-rata Nilai CPL: 85.00\n\nRincian Nilai CPL:\n` + 
               cplListInitial.map(c => `- ${c.code}: ${c.score !== null ? c.score : "Belum Ditempuh"} (${c.status.toUpperCase().replace('_', ' ')})`).join("\n");
             
@@ -221,33 +235,112 @@ export default function Home() {
     }, 200);
   };
 
-  // Calculations for GPA and SKS
-  const getFilteredGrades = () => {
-    if (transcriptSemesterFilter === "all") return courseGradesInitial;
-    return courseGradesInitial.filter(g => g.semester.toString() === transcriptSemesterFilter);
+  // Handle Export to Excel Simulation
+  const handleExportExcel = () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    triggerToast("Mengekspor data mata kuliah...", "info");
+
+    setTimeout(() => {
+      setIsExporting(false);
+      triggerToast("Data nilai berhasil diekspor ke format Excel!", "success");
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "No,Semester,Kode MK,Nama Mata Kuliah,SKS,UK1,UK2,UK3,UK4,UK5,Nilai Akhir,Nilai Skala 100,Huruf\n";
+      
+      courseGradesInitial.forEach((g, idx) => {
+        const row = [
+          idx + 1,
+          g.semester,
+          g.code,
+          g.name,
+          g.sks,
+          g.uk1,
+          g.uk2,
+          g.uk3,
+          g.uk4,
+          g.uk5,
+          g.nilaiAkhir.toFixed(2),
+          g.nilaiSkala100.toFixed(2),
+          g.gradeLetter
+        ].join(",");
+        csvContent += row + "\n";
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Riwayat_Nilai_I0320045_Ahmad_Fadli.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }, 1500);
   };
 
-  const calculateSksAndGPA = () => {
-    const grades = getFilteredGrades();
-    const totalSks = grades.reduce((acc, curr) => acc + curr.sks, 0);
-    const weightedPoints = grades.reduce((acc, curr) => {
-      let val = 0;
-      if (curr.gradeLetter === "A") val = 4.0;
-      else if (curr.gradeLetter === "A-") val = 3.7;
-      else if (curr.gradeLetter === "B+") val = 3.3;
-      else if (curr.gradeLetter === "B") val = 3.0;
-      else if (curr.gradeLetter === "B-") val = 2.7;
-      else if (curr.gradeLetter === "C+") val = 2.3;
-      else if (curr.gradeLetter === "C") val = 2.0;
-      else if (curr.gradeLetter === "C-") val = 1.7;
-      else if (curr.gradeLetter === "D") val = 1.0;
-      return acc + (val * curr.sks);
-    }, 0);
-    const gpa = totalSks > 0 ? (weightedPoints / totalSks).toFixed(2) : "0.00";
-    return { totalSks, gpa };
+  // Filtering and Sorting logic for the new high-fidelity table
+  const getFilteredAndSortedGrades = () => {
+    let result = [...courseGradesInitial];
+
+    // 1. Filter by Search input (Course code or Course name)
+    if (transcriptSearch.trim() !== "") {
+      const q = transcriptSearch.toLowerCase();
+      result = result.filter(g => 
+        g.code.toLowerCase().includes(q) || 
+        g.name.toLowerCase().includes(q)
+      );
+    }
+
+    // 2. Filter by Semester Dropdown
+    if (transcriptSemesterFilter !== "all") {
+      result = result.filter(g => g.semester.toString() === transcriptSemesterFilter);
+    }
+
+    // 3. Sort by chosen parameter
+    result.sort((a, b) => {
+      switch (transcriptSortBy) {
+        case "semester-asc":
+          return a.semester - b.semester || a.code.localeCompare(b.code);
+        case "semester-desc":
+          return b.semester - a.semester || a.code.localeCompare(b.code);
+        case "nilai-desc":
+          return b.nilaiAkhir - a.nilaiAkhir;
+        case "nilai-asc":
+          return a.nilaiAkhir - b.nilaiAkhir;
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
   };
 
-  const { totalSks, gpa } = calculateSksAndGPA();
+  const processedGrades = getFilteredAndSortedGrades();
+
+  // Color mappings for grade badges (rounded squares)
+  const getGradeBadgeStyle = (letter: string) => {
+    switch (letter) {
+      case "A":
+        return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      case "A-":
+        return "bg-emerald-50 text-emerald-600 border border-emerald-100";
+      case "B+":
+        return "bg-indigo-50 text-indigo-700 border border-indigo-100";
+      case "B":
+        return "bg-blue-50 text-blue-700 border border-blue-100";
+      case "B-":
+        return "bg-amber-50 text-amber-700 border border-amber-100";
+      case "C+":
+        return "bg-amber-100 text-amber-800 border border-amber-200";
+      case "C":
+        return "bg-orange-50 text-orange-700 border border-orange-100";
+      default:
+        return "bg-rose-50 text-rose-700 border border-rose-100";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white antialiased">
@@ -451,15 +544,14 @@ export default function Home() {
             <svg className="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-indigo-600 font-extrabold">{activeTab}</span>
+            <span className="text-indigo-600 font-extrabold text-xs">{activeTab}</span>
           </nav>
 
-          {/* TAB 1: DASHBOARD (MAIN FIGMA VISUALS) */}
+          {/* TAB 1: DASHBOARD */}
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               {/* --- 1. PROFILE BANNER CARD (PURPLE GRADIENT) --- */}
               <div className="bg-gradient-to-r from-violet-700 via-indigo-700 to-fuchsia-700 text-white rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 transform hover:scale-[1.005] transition-all duration-300 border border-violet-800/10">
-                {/* Floating blurred ambient shapes to look premium */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full filter blur-2xl -translate-y-12 translate-x-12" />
                 <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-fuchsia-600/30 rounded-full filter blur-2xl" />
 
@@ -482,7 +574,6 @@ export default function Home() {
                     <p className="text-4xl md:text-5xl font-extrabold tracking-tighter mt-1">3.75</p>
                   </div>
 
-                  {/* Download button with simulated progress bar */}
                   <button
                     onClick={handleDownloadReport}
                     disabled={isDownloading}
@@ -510,7 +601,6 @@ export default function Home() {
 
               {/* --- 2. 4 STAT CARDS GRID --- */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Stat 1: CPL Tercapai */}
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "tercapai" ? null : "tercapai")}
                   className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
@@ -529,7 +619,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Stat 2: Belum Tercapai */}
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "belum_tercapai" ? null : "belum_tercapai")}
                   className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
@@ -548,7 +637,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Stat 3: Belum Ditempuh */}
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "belum_ditempuh" ? null : "belum_ditempuh")}
                   className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
@@ -567,7 +655,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Stat 4: Rata-rata CPL */}
                 <div
                   onClick={() => {
                     triggerToast("Rata-rata dihitung dari seluruh CPL yang bernilai", "success");
@@ -587,7 +674,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* --- 3. CP CAPAIAN CHART CARD (PREMIUM SVG PLOT) --- */}
+              {/* --- 3. CP CAPAIAN CHART CARD --- */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6 space-y-6 relative">
                 <div>
                   <h3 className="text-base md:text-lg font-extrabold text-slate-800 tracking-tight">Grafik Capaian CPL 1-10</h3>
@@ -596,15 +683,12 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Custom bar chart builder using highly layout-perfect SVG and tooltips */}
                 <div className="relative pt-6 min-h-[280px] w-full select-none">
-                  {/* Grid Lines and Axis values */}
                   <div className="absolute inset-0 flex flex-col justify-between text-[10px] font-bold text-slate-400 py-8 pointer-events-none">
                     <div className="w-full flex items-center gap-2">
                       <span className="w-6 text-right shrink-0">100</span>
                       <div className="flex-1 border-b border-dashed border-slate-200" />
                     </div>
-                    {/* The Target Line 80 with visual emphasis */}
                     <div className="w-full flex items-center gap-2 relative z-10">
                       <span className="w-6 text-right text-rose-500 font-extrabold shrink-0">80</span>
                       <div className="flex-1 border-b-2 border-dashed border-rose-500" />
@@ -624,15 +708,11 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Columns Section */}
                   <div className="h-[200px] flex items-end pl-8 pr-2 pb-8 relative z-20 gap-3 md:gap-4 lg:gap-6">
                     {cplListInitial.map((cpl) => {
                       const hasScore = cpl.score !== null;
                       const scoreVal = cpl.score ?? 0;
-                      // Height calculates relative to 100 max
                       const heightPercent = `${scoreVal}%`;
-                      
-                      // Check if matches the stat filter highlights
                       const isHighlighted = highlightedStat === null || cpl.status === highlightedStat;
                       
                       return (
@@ -640,7 +720,6 @@ export default function Home() {
                           key={cpl.id}
                           className="flex-1 flex flex-col items-center justify-end h-full group relative"
                         >
-                          {/* Columns render */}
                           {hasScore ? (
                             <div
                               style={{ height: heightPercent }}
@@ -649,7 +728,7 @@ export default function Home() {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setTooltipPos({
                                   x: e.currentTarget.offsetLeft + rect.width / 2,
-                                  y: 200 - (scoreVal * 1.5), // dynamic relative height
+                                  y: 200 - (scoreVal * 1.5),
                                 });
                               }}
                               onMouseLeave={() => setHoveredCpl(null)}
@@ -659,16 +738,12 @@ export default function Home() {
                                   : "bg-indigo-200/40 opacity-30"
                               }`}
                             >
-                              {/* Glowing cap inside the column */}
-                              <div className={`absolute top-0 inset-x-0 h-1.5 rounded-t-lg bg-indigo-300/40`} />
-                              
-                              {/* Inner Text score */}
+                              <div className="absolute top-0 inset-x-0 h-1.5 rounded-t-lg bg-indigo-300/40" />
                               <span className="absolute -top-6 inset-x-0 text-[10px] font-black text-center text-indigo-700 tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                 {scoreVal}
                               </span>
                             </div>
                           ) : (
-                            /* Unaccomplished dashed column visual block */
                             <div
                               className={`w-full h-[15%] border-2 border-dashed rounded-t-lg bg-slate-50 transition-all duration-300 flex items-center justify-center ${
                                 isHighlighted ? "border-slate-300" : "border-slate-200/50 opacity-30"
@@ -679,7 +754,6 @@ export default function Home() {
                             </div>
                           )}
 
-                          {/* X-axis code labels */}
                           <span className={`absolute -bottom-6 text-[10px] font-extrabold tracking-tight transition-colors duration-200 ${
                             hasScore ? "text-slate-600 group-hover:text-indigo-700" : "text-slate-400"
                           }`}>
@@ -690,7 +764,6 @@ export default function Home() {
                     })}
                   </div>
 
-                  {/* PREMIUM CUSTOM HOVER TOOLTIP */}
                   {hoveredCpl && (
                     <div
                       style={{
@@ -754,7 +827,6 @@ export default function Home() {
                       key={cpl.id}
                       className="bg-white rounded-2xl border border-slate-200 overflow-hidden transition-all duration-300 shadow-sm"
                     >
-                      {/* Accordion Card Header Click Trigger */}
                       <button
                         onClick={() => {
                           setExpandedCplCard(isExpanded ? null : cpl.id);
@@ -771,7 +843,7 @@ export default function Home() {
                               cpl.status === "tercapai"
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
                                 : cpl.status === "belum_tercapai"
-                                ? "bg-rose-50 text-rose-700 border border-rose-100 animate-pulse"
+                                ? "bg-rose-50 text-rose-700 border border-rose-100"
                                 : "bg-slate-100 text-slate-500"
                             }`}>
                               {cpl.status.replace("_", " ")}
@@ -800,7 +872,6 @@ export default function Home() {
                         </div>
                       </button>
 
-                      {/* Expanded Section Details */}
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4 animate-fadeIn">
                           <div className="space-y-1">
@@ -854,114 +925,269 @@ export default function Home() {
             </div>
           )}
 
-          {/* TAB 3: RIWAYAT NILAI */}
+          {/* TAB 3: RIWAYAT NILAI & MATA KULIAH (UPGRADED HIGH-FIDELITY MATCHINGFIGMA SCREENSHOT) */}
           {activeTab === "riwayat-nilai" && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-800">Riwayat Nilai & Transkrip</h2>
-                  <p className="text-xs text-slate-500 mt-1 leading-snug">
-                    Daftar seluruh nilai mata kuliah yang telah ditempuh per semester beserta pemetaan CPL-nya.
-                  </p>
-                </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-800">Riwayat Nilai & Mata Kuliah</h2>
+              </div>
 
-                {/* Filter Semester active selector */}
-                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1 shadow-sm shrink-0">
-                  {["all", "1", "2", "3", "4"].map((sem) => (
-                    <button
-                      key={sem}
-                      onClick={() => {
-                        setTranscriptSemesterFilter(sem);
-                        triggerToast(`Filter semester diubah ke: ${sem === "all" ? "Semua Semester" : `Semester ${sem}`}`, "success");
+              {/* --- 1. METADATA HEADER PANEL --- */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold text-slate-500">
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">Fakultas</span>
+                      <span className="text-slate-800">: Teknik</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">Program Studi</span>
+                      <span className="text-slate-800">: Teknik Industri</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">Kurikulum</span>
+                      <span className="text-slate-800">: 2020</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 md:border-l md:border-slate-100 md:pl-6">
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">Nama</span>
+                      <span className="text-slate-800 font-extrabold">: Ahmad Fadli</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">NIM</span>
+                      <span className="text-slate-800 font-extrabold">: I0320045</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="w-32 text-slate-400 uppercase tracking-wide">Semester</span>
+                      <span className="text-slate-800">: 5 (Ganjil 2024/2025)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* --- 2. CONTROLS BAR (SEARCH, FILTERS, EXPORT) --- */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between">
+                  {/* Search Bar */}
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Cari nama atau kode mata kuliah..."
+                      value={transcriptSearch}
+                      onChange={(e) => setTranscriptSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:bg-white transition-all font-semibold"
+                    />
+                  </div>
+
+                  {/* Filters and sorting selection row */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Funnel Icon indicator */}
+                    <div className="p-2.5 rounded-xl border border-slate-200/80 text-slate-400 bg-slate-50/30">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                      </svg>
+                    </div>
+
+                    {/* Semester filtering dropdown */}
+                    <select
+                      value={transcriptSemesterFilter}
+                      onChange={(e) => {
+                        setTranscriptSemesterFilter(e.target.value);
+                        triggerToast(`Filter Semester: ${e.target.value === "all" ? "Semua Semester" : `Semester ${e.target.value}`}`, "success");
                       }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        transcriptSemesterFilter === sem
-                          ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-                      }`}
+                      className="px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600 cursor-pointer"
                     >
-                      {sem === "all" ? "Semua" : `Sem ${sem}`}
+                      <option value="all">Semua Semester</option>
+                      <option value="1">Semester 1</option>
+                      <option value="2">Semester 2</option>
+                      <option value="3">Semester 3</option>
+                      <option value="4">Semester 4</option>
+                      <option value="5">Semester 5</option>
+                    </select>
+
+                    {/* Sorting dropdown selector */}
+                    <div className="flex items-center gap-2">
+                      <div className="p-2.5 rounded-xl border border-slate-200/80 text-slate-400 bg-slate-50/30">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      </div>
+                      <select
+                        value={transcriptSortBy}
+                        onChange={(e) => setTranscriptSortBy(e.target.value)}
+                        className="px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-600 cursor-pointer"
+                      >
+                        <option value="semester-asc">Semester (1–5)</option>
+                        <option value="semester-desc">Semester (5–1)</option>
+                        <option value="nilai-desc">Nilai Akhir (Tinggi)</option>
+                        <option value="nilai-asc">Nilai Akhir (Rendah)</option>
+                        <option value="name-asc">Nama Mata Kuliah (A-Z)</option>
+                        <option value="name-desc">Nama Mata Kuliah (Z-A)</option>
+                      </select>
+                    </div>
+
+                    {/* Green Export button */}
+                    <button
+                      onClick={handleExportExcel}
+                      disabled={isExporting}
+                      className="flex items-center justify-center gap-2 px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800/85 text-white rounded-xl shadow font-extrabold text-xs tracking-wide transition active:scale-95 cursor-pointer border border-emerald-700/10"
+                    >
+                      {isExporting ? (
+                        <>
+                          <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <span>Exporting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>Export</span>
+                        </>
+                      )}
                     </button>
-                  ))}
+                  </div>
+                </div>
+
+                <div className="text-[10px] md:text-xs font-bold text-slate-400 px-1 pt-1">
+                  Menampilkan {processedGrades.length} dari {courseGradesInitial.length} mata kuliah
                 </div>
               </div>
 
-              {/* Card Summary SKS & GPA */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Total Kredit SKS Diambil</p>
-                    <p className="text-2xl font-black text-slate-800 mt-1">{totalSks} SKS</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 border-t sm:border-t-0 sm:border-l border-slate-100 pt-4 sm:pt-0 sm:pl-6">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Indeks Prestasi Kumulatif (IPK)</p>
-                    <p className="text-2xl font-black text-slate-800 mt-1">{transcriptSemesterFilter === "all" ? "3.75" : gpa}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Table Transcript */}
+              {/* --- 3. HIGH-FIDELITY GRADINGS TABLE (MULTICOLOR CODES & MULTI-GRID HEADERS) --- */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* Table Horizontal Scrollable container */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full border-collapse text-xs text-center min-w-[900px]">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-center">
-                        <th className="px-4 py-4 w-12 text-center">No.</th>
-                        <th className="px-4 py-4 w-28 text-left">Kode MK</th>
-                        <th className="px-6 py-4 text-left">Nama Mata Kuliah</th>
-                        <th className="px-4 py-4 w-16 text-center">Semester</th>
-                        <th className="px-4 py-4 w-16 text-center">SKS</th>
-                        <th className="px-4 py-4 w-24 text-center">Nilai Angka</th>
-                        <th className="px-4 py-4 w-20 text-center">Nilai Huruf</th>
-                        <th className="px-4 py-4 w-32 text-center">Capaian CPL</th>
+                      {/* Subtitle Banner Title above columns */}
+                      <tr className="bg-white text-slate-800 font-extrabold text-xs text-left border-b border-slate-100">
+                        <td colSpan={13} className="px-6 py-4.5 tracking-wider uppercase font-black text-slate-900 border-none">
+                          Sebelas Maret University
+                        </td>
+                      </tr>
+
+                      {/* Row level 1 Column Headers */}
+                      <tr className="bg-indigo-950 text-white font-extrabold border-b border-indigo-900/50">
+                        <th rowSpan={3} className="px-4 py-4 w-12 text-center bg-[#152a42]">No</th>
+                        <th rowSpan={3} className="px-4 py-4 w-16 text-center bg-[#152a42]">Semester</th>
+                        <th rowSpan={3} className="px-4 py-4 w-28 text-left bg-[#152a42] pl-6">Kode MK</th>
+                        <th rowSpan={3} className="px-6 py-4 text-left bg-[#152a42]">Nama Mata Kuliah</th>
+                        <th rowSpan={3} className="px-4 py-4 w-14 text-center bg-[#152a42]">SKS</th>
+                        
+                        {/* Nilai Multi-columns merged */}
+                        <th colSpan={8} className="py-2.5 font-black uppercase text-center tracking-widest bg-indigo-900 border-l border-indigo-800/40 text-[10px]">
+                          Nilai
+                        </th>
+                      </tr>
+
+                      {/* Row level 2 merged subheaders */}
+                      <tr className="bg-indigo-900 text-white font-extrabold border-b border-indigo-800/40 text-[10px]">
+                        <th colSpan={5} className="py-2 bg-amber-500 text-slate-950 font-black text-center tracking-wider uppercase border-l border-amber-400">
+                          NILAI DARI SISTEM
+                        </th>
+                        <th rowSpan={2} className="px-2 py-3.5 w-24 text-center bg-[#152a42] border-l border-indigo-800/40">NILAI AKHIR</th>
+                        <th rowSpan={2} className="px-2 py-3.5 w-24 text-center bg-[#152a42] border-l border-indigo-800/40">NILAI SKALA 100</th>
+                        <th rowSpan={2} className="px-4 py-3.5 w-20 text-center bg-[#152a42] border-l border-indigo-800/40">HURUF</th>
+                      </tr>
+
+                      {/* Row level 3 System Assessment codes */}
+                      <tr className="text-white font-black text-[9px] border-b border-slate-200">
+                        {/* UK1 (TUGAS) - Salmon red */}
+                        <th className="py-2.5 w-16 bg-rose-500 border-r border-rose-400/30 uppercase text-center leading-tight">
+                          UK1<br/><span className="text-[8px] opacity-90 font-bold">(TUGAS)</span>
+                        </th>
+                        {/* UK2 (UTS) - Orange */}
+                        <th className="py-2.5 w-16 bg-orange-500 border-r border-orange-400/30 uppercase text-center leading-tight">
+                          UK2<br/><span className="text-[8px] opacity-90 font-bold">(UTS)</span>
+                        </th>
+                        {/* UK3 (UAS) - Green-teal */}
+                        <th className="py-2.5 w-16 bg-teal-600 border-r border-teal-500/30 uppercase text-center leading-tight">
+                          UK3<br/><span className="text-[8px] opacity-90 font-bold">(UAS)</span>
+                        </th>
+                        {/* UK4 (PARTISIPATIF) - Light blue-teal */}
+                        <th className="py-2.5 w-16 bg-sky-500 border-r border-sky-400/30 uppercase text-center leading-tight">
+                          UK4<br/><span className="text-[8px] opacity-90 font-bold">(PARTISIPATIF)</span>
+                        </th>
+                        {/* UK5 (PROYEK) - Indigo */}
+                        <th className="py-2.5 w-16 bg-indigo-600 border-r border-indigo-500/30 uppercase text-center leading-tight">
+                          UK5<br/><span className="text-[8px] opacity-90 font-bold">(PROYEK)</span>
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-center font-semibold text-slate-700">
-                      {getFilteredGrades().length > 0 ? (
-                        getFilteredGrades().map((grade, index) => (
+
+                    <tbody className="divide-y divide-slate-100 text-[11px] font-bold text-slate-700">
+                      {processedGrades.length > 0 ? (
+                        processedGrades.map((grade, index) => (
                           <tr key={grade.code} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="px-4 py-3.5 text-center text-slate-400 font-bold">{index + 1}</td>
-                            <td className="px-4 py-3.5 text-left font-bold text-slate-500">{grade.code}</td>
-                            <td className="px-6 py-3.5 text-left font-bold text-slate-800">{grade.name}</td>
-                            <td className="px-4 py-3.5 text-center font-bold text-slate-500">Semester {grade.semester}</td>
-                            <td className="px-4 py-3.5 text-center font-bold text-slate-600">{grade.sks}</td>
-                            <td className="px-4 py-3.5 text-center font-bold text-slate-800">{grade.gradeNumber.toFixed(2)}</td>
-                            <td className="px-4 py-3.5 text-center">
-                              <span className="inline-block px-2.5 py-1 rounded bg-indigo-50 border border-indigo-100 text-indigo-700 font-black">
+                            {/* No */}
+                            <td className="px-4 py-4 text-center text-slate-400 font-bold bg-slate-50/20">
+                              {index + 1}
+                            </td>
+                            {/* Semester */}
+                            <td className="px-4 py-4 text-center font-bold text-slate-500">
+                              {grade.semester}
+                            </td>
+                            {/* Kode MK */}
+                            <td className="px-4 py-4 text-left font-extrabold text-slate-500 pl-6 tracking-wide">
+                              {grade.code}
+                            </td>
+                            {/* Nama Mata Kuliah */}
+                            <td className="px-6 py-4 text-left font-extrabold text-slate-800 max-w-xs truncate">
+                              {grade.name}
+                            </td>
+                            {/* SKS */}
+                            <td className="px-4 py-4 text-center font-bold text-slate-600">
+                              {grade.sks}
+                            </td>
+                            
+                            {/* NILAI DARI SISTEM CELLS */}
+                            <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-rose-50/10 border-r border-slate-100">
+                              {grade.uk1}
+                            </td>
+                            <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-orange-50/10 border-r border-slate-100">
+                              {grade.uk2}
+                            </td>
+                            <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-teal-50/10 border-r border-slate-100">
+                              {grade.uk3}
+                            </td>
+                            <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-sky-50/10 border-r border-slate-100">
+                              {grade.uk4}
+                            </td>
+                            <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-indigo-50/10 border-r border-slate-100">
+                              {grade.uk5}
+                            </td>
+
+                            {/* NILAI AKHIR */}
+                            <td className="px-2 py-4 text-center font-black text-slate-800 border-r border-slate-100 bg-slate-50/20">
+                              {grade.nilaiAkhir.toFixed(2)}
+                            </td>
+                            {/* NILAI SKALA 100 */}
+                            <td className="px-2 py-4 text-center font-black text-slate-800 border-r border-slate-100 bg-slate-50/20">
+                              {grade.nilaiSkala100.toFixed(2)}
+                            </td>
+                            {/* HURUF BADGE SQUARE */}
+                            <td className="px-4 py-4 text-center">
+                              <span className={`inline-block w-8 py-1 rounded-md text-[10px] font-black text-center uppercase tracking-tight shadow-sm ${getGradeBadgeStyle(grade.gradeLetter)}`}>
                                 {grade.gradeLetter}
                               </span>
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                {grade.cplMapped.map((c) => (
-                                  <span
-                                    key={c}
-                                    className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200"
-                                  >
-                                    {c}
-                                  </span>
-                                ))}
-                              </div>
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={8} className="py-12 text-slate-400 font-bold text-sm text-center">
-                            Tidak ada nilai terdaftar untuk filter ini.
+                          <td colSpan={13} className="py-12 text-slate-400 font-bold text-sm text-center">
+                            Tidak ada mata kuliah yang cocok dengan kata kunci atau filter Anda.
                           </td>
                         </tr>
                       )}
@@ -969,8 +1195,9 @@ export default function Home() {
                   </table>
                 </div>
 
-                <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between text-xs text-slate-400 font-bold">
-                  <p>Menampilkan {getFilteredGrades().length} Mata Kuliah Terpilih</p>
+                {/* Table pagination footer */}
+                <div className="bg-slate-50 border-t border-slate-200 px-6 py-4.5 flex items-center justify-between text-xs text-slate-400 font-bold">
+                  <p>Menampilkan {processedGrades.length} Mata Kuliah Terpilih</p>
                   <p>Sistem Capaian Pembelajaran Lulusan Terpadu</p>
                 </div>
               </div>
@@ -979,7 +1206,6 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Embedded visual styling configurations specifically for dynamic tooltip fading and mobile responsive layouts */}
       <style jsx global>{`
         @keyframes fadeIn {
           from {
