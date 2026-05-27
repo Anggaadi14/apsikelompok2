@@ -150,7 +150,7 @@ const courseGradesInitial: CourseGrade[] = [
   { code: "TIN306", name: "Sistem Informasi Industri", sks: 3, semester: 4, gradeNumber: 80, gradeLetter: "A-", cplMapped: ["CPL 7"] },
 ];
 
-export default function Home() {
+export default function StudentDashboard() {
   // Navigation tabs: 'dashboard' | 'detail-cpl' | 'riwayat-nilai'
   const [activeTab, setActiveTab] = useState<"dashboard" | "detail-cpl" | "riwayat-nilai">("dashboard");
   const [activeSemesterDropdown, setActiveSemesterDropdown] = useState(false);
