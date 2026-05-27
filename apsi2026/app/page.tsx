@@ -1,6 +1,36 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import {
+  User,
+  Award,
+  BookOpen,
+  Target,
+  GraduationCap,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  CheckCircle,
+  XCircle,
+  MinusCircle,
+  AlertTriangle
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Legend
+} from "recharts";
 
 // Types for CPL Data
 interface CPLData {
@@ -33,7 +63,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 1,
     code: "CPL 1",
-    name: "Sikap dan Tata Nilai (Menerapkan nilai-nilai Pancasila dan etika profesi)",
+    name: "An ability to apply knowledge of mathematics, natural and/or material sciences, information technology, and engineering to acquire comprehensive understanding of engineering principles.",
     score: 82,
     status: "tercapai",
     courses: [
@@ -44,7 +74,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 2,
     code: "CPL 2",
-    name: "Penguasaan Pengetahuan (Menguasai konsep matematika, sains, dan prinsip rekayasa)",
+    name: "An ability to design integrated systems to meet desired needs within realistic constraints in such aspects as technical, standard, law, economic, environment, social, politics, health and safety, sustainability, as well as, to involve respective stakeholders, to recognize and/or utilize the potential local and national resources with global perspective.",
     score: 78,
     status: "belum_tercapai",
     courses: [
@@ -55,7 +85,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 3,
     code: "CPL 3",
-    name: "Keterampilan Kerja Umum (Mampu menerapkan pemikiran logis, kritis, dan sistematis)",
+    name: "An ability to design and conduct laboratory and/or field experiments as well as to analyze and interpret data to support decision-making processes in industrial engineering.",
     score: 88,
     status: "tercapai",
     courses: [
@@ -66,7 +96,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 4,
     code: "CPL 4",
-    name: "Keterampilan Kerja Khusus (Mampu merancang, memperbaiki, dan mengoperasikan sistem terintegrasi)",
+    name: "An ability to identify, formulate, analyze, and solve complex engineering problems in an integrated system.",
     score: 85,
     status: "tercapai",
     courses: [
@@ -77,7 +107,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 5,
     code: "CPL 5",
-    name: "Mampu memformulasi dan menyelesaikan masalah rekayasa sistem industri",
+    name: "An ability to apply methods, skills, and modern engineering tools necessary for industrial engineering practices.",
     score: 75,
     status: "belum_tercapai",
     courses: [
@@ -88,7 +118,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 6,
     code: "CPL 6",
-    name: "Mampu merancang eksperimen dan menganalisis data rekayasa",
+    name: "An ability to communicate effectively with a range of audiences and situations.",
     score: null,
     status: "belum_ditempuh",
     courses: [],
@@ -96,7 +126,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 7,
     code: "CPL 7",
-    name: "Mampu menggunakan metode, keterampilan, dan peralatan teknik modern untuk praktik rekayasa",
+    name: "An ability to plan, accomplish, and evaluate tasks under given constraints.",
     score: 86,
     status: "tercapai",
     courses: [
@@ -107,7 +137,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 8,
     code: "CPL 8",
-    name: "Memiliki tanggung jawab profesional, sosial, dan kepedulian lingkungan",
+    name: "An ability to work in multidisciplinary and multicultural team.",
     score: null,
     status: "belum_ditempuh",
     courses: [],
@@ -115,7 +145,7 @@ const cplListInitial: CPLData[] = [
   {
     id: 9,
     code: "CPL 9",
-    name: "Mampu berkomunikasi secara efektif baik lisan maupun tulisan",
+    name: "An ability to be accountable and responsible to the society and adhere to professional ethics in solving industrial engineering problems.",
     score: 83,
     status: "tercapai",
     courses: [
@@ -126,10 +156,50 @@ const cplListInitial: CPLData[] = [
   {
     id: 10,
     code: "CPL 10",
-    name: "Mampu belajar sepanjang hayat dan beradaptasi terhadap perubahan",
+    name: "An ability to take initiative in life-long learning, including access to relevant knowledge on contemporary issues.",
     score: null,
     status: "belum_ditempuh",
     courses: [],
+  },
+];
+
+// Graduate Profile (Profil Lulusan) Interface & Data
+interface GraduateProfile {
+  id: number;
+  title: string;
+  alias: string;
+  description: string;
+  cpls: string[];
+}
+
+const graduateProfiles: GraduateProfile[] = [
+  {
+    id: 1,
+    title: "Profil 1: Kreatif dan Ilmiah",
+    alias: "Kreatif dan Ilmiah",
+    description: "Mampu memanfaatkan prinsip-prinsip kerekayasaan dan metode ilmiah dengan mengedepankan critical thinking untuk menyelesaikan masalah rekayasa kompleks.",
+    cpls: ["CPL 1", "CPL 4"],
+  },
+  {
+    id: 2,
+    title: "Profil 2: Berpikir Sistem dan Realistis",
+    alias: "Berpikir Sistem dan Realistis",
+    description: "Mampu merancang dan memperbaiki sistem terintegrasi untuk memenuhi kebutuhan pelanggan (masyarakat) dengan mempertimbangkan kondisi dan batasan realistis.",
+    cpls: ["CPL 2", "CPL 3", "CPL 4", "CPL 6", "CPL 7", "CPL 8"],
+  },
+  {
+    id: 3,
+    title: "Profil 3: Profesional",
+    alias: "Profesional",
+    description: "Mampu menyelesaikan tugas dan membuat keputusan yang tepat berdasarkan evaluasi yang objektif secara individual dan/atau kolaboratif.",
+    cpls: ["CPL 8", "CPL 9"],
+  },
+  {
+    id: 4,
+    title: "Profil 4: Berorientasi Masa Depan",
+    alias: "Berorientasi Masa Depan",
+    description: "Mampu beradaptasi secara efektif pada situasi kerja yang dinamis melalui pengembangan diri terus menerus terutama pengetahuan dan keterampilan kerekayasaan dengan menjunjung profesionalitas dan etika.",
+    cpls: ["CPL 5", "CPL 6", "CPL 7", "CPL 9"],
   },
 ];
 
@@ -162,12 +232,139 @@ const courseGradesInitial: CourseGrade[] = [
   { code: "TIO3402", name: "Analisis Keputusan", sks: 2, semester: 5, uk1: 20, uk2: 88, uk3: 85, uk4: 20, uk5: 20, nilaiAkhir: 87.00, nilaiSkala100: 87.00, gradeLetter: "A", cplMapped: ["CPL 5"] },
 ];
 
+const detailCPL = [
+  {
+    cpl: "CPL-1",
+    deskripsi: "Mampu menerapkan pengetahuan matematika, sains, dan teknik industri",
+    nilai: 82,
+    status: "Tercapai",
+    ik: [
+      {
+        kode: "IK-1.1",
+        deskripsi: "Memahami konsep dasar matematika teknik",
+        bobot: 50,
+        nilai: 82,
+        cpmk: [
+          {
+            kode: "CPMK-1.1",
+            deskripsi: "Mahasiswa mampu menjelaskan konsep probabilitas",
+            bobot: 40,
+            nilai: 85,
+            matakuliah: "Statistika Industri I (TIO3201)",
+            semester: 3,
+            nilaiMK: "A"
+          },
+          {
+            kode: "CPMK-1.2",
+            deskripsi: "Mahasiswa mampu menghitung distribusi probabilitas",
+            bobot: 60,
+            nilai: 80,
+            matakuliah: "Statistika Industri I (TIO3201)",
+            semester: 3,
+            nilaiMK: "A"
+          }
+        ]
+      },
+      {
+        kode: "IK-1.2",
+        deskripsi: "Menerapkan metode statistika dalam analisis data",
+        bobot: 50,
+        nilai: 82,
+        cpmk: [
+          {
+            kode: "CPMK-2.1",
+            deskripsi: "Mahasiswa mampu melakukan uji hipotesis",
+            bobot: 100,
+            nilai: 82,
+            matakuliah: "Statistika Industri I (TIO3201)",
+            semester: 3,
+            nilaiMK: "A"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    cpl: "CPL-2",
+    deskripsi: "Mampu merancang sistem terintegrasi dengan mempertimbangkan aspek teknis dan ekonomis",
+    nilai: 78,
+    status: "Belum Tercapai",
+    ik: [
+      {
+        kode: "IK-2.1",
+        deskripsi: "Merancang sistem produksi yang efisien",
+        bobot: 100,
+        nilai: 78,
+        cpmk: [
+          {
+            kode: "CPMK-3.1",
+            deskripsi: "Mahasiswa mampu merancang tata letak pabrik",
+            bobot: 50,
+            nilai: 75,
+            matakuliah: "Kalkulus I (TIO3102)",
+            semester: 1,
+            nilaiMK: "B+"
+          },
+          {
+            kode: "CPMK-3.2",
+            deskripsi: "Mahasiswa mampu menganalisis aliran material",
+            bobot: 50,
+            nilai: 80,
+            matakuliah: "KALKULUS II (TIO3001)",
+            semester: 2,
+            nilaiMK: "B+"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    cpl: "CPL-7",
+    deskripsi: "Mampu merancang dan memperbaiki sistem kerja terintegrasi guna meningkatkan produktivitas",
+    nilai: 86,
+    status: "Tercapai",
+    ik: [
+      {
+        kode: "IK-7.1",
+        deskripsi: "Merancang dan mengevaluasi sistem kerja terintegrasi",
+        bobot: 105,
+        nilai: 86,
+        cpmk: [
+          {
+            kode: "CPMK-7.1",
+            deskripsi: "Mahasiswa mampu mempresentasikan hasil kerja",
+            bobot: 100,
+            nilai: 86,
+            matakuliah: "Sistem Informasi Industri (TIO3304)",
+            semester: 4,
+            nilaiMK: "A-"
+          }
+        ]
+      }
+    ]
+  }
+];
+
 export default function Home() {
-  // Navigation tabs: 'dashboard' | 'detail-cpl' | 'riwayat-nilai'
-  const [activeTab, setActiveTab] = useState<"dashboard" | "detail-cpl" | "riwayat-nilai">("riwayat-nilai"); // Default to riwayat-nilai for review
+  // Navigation tabs: 'dashboard' | 'detail-cpl' | 'riwayat-nilai' | 'profil-lulusan'
+  const [activeTab, setActiveTab] = useState<"dashboard" | "detail-cpl" | "riwayat-nilai" | "profil-lulusan">("riwayat-nilai"); // Default to riwayat-nilai for review
   const [activeSemesterDropdown, setActiveSemesterDropdown] = useState(false);
   const [selectedSemester, setSelectedSemester] = useState("Ganjil 2024/2025");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const [cplSubTab, setCplSubTab] = useState<"grafik" | "lk" | "lembar-kerja" | "report">("grafik");
+  const [expandedCPL, setExpandedCPL] = useState<number | null>(null);
+
+  // Helper to calculate score for a Graduate Profile based on its mapped CPLs
+  const calculateProfileScore = (profileCpls: string[]) => {
+    const relevantCpls = cplListInitial.filter(c => profileCpls.includes(c.code));
+    const scoredCpls = relevantCpls.filter(c => c.score !== null);
+    if (scoredCpls.length === 0) return null;
+    const sum = scoredCpls.reduce((acc, c) => acc + (c.score ?? 0), 0);
+    return Math.round(sum / scoredCpls.length);
+  };
+
+
 
   // States for dynamic interactions
   const [hoveredCpl, setHoveredCpl] = useState<CPLData | null>(null);
@@ -181,6 +378,32 @@ export default function Home() {
 
   // Detail CPL Active Expanded Card
   const [expandedCplCard, setExpandedCplCard] = useState<number | null>(null);
+
+  const cplData = cplListInitial.map(cpl => {
+    let category = "Pengetahuan";
+    if (cpl.code === "CPL 2" || cpl.code === "CPL 5" || cpl.code === "CPL 10") category = "Keterampilan Khusus";
+    else if (cpl.code === "CPL 3" || cpl.code === "CPL 7") category = "Keterampilan Umum";
+    else if (cpl.code === "CPL 6" || cpl.code === "CPL 9") category = "Sikap";
+
+    const score = cpl.score ?? 0;
+    const statusLabel = cpl.score === null 
+      ? "Belum Ditempuh" 
+      : score >= 80 ? "Tercapai" : "Belum Tercapai";
+
+    return {
+      name: cpl.code.replace("CPL ", "CPL-"),
+      nilai: score,
+      target: 80,
+      status: statusLabel,
+      kategori: category,
+    };
+  });
+
+  const radarData = cplData.map(c => ({
+    subject: c.name,
+    nilai: c.nilai,
+    target: c.target,
+  }));
 
   // Simulation loading / Download actions
   const [isDownloading, setIsDownloading] = useState(false);
@@ -214,10 +437,10 @@ export default function Home() {
           setTimeout(() => {
             setIsDownloading(false);
             triggerToast("Laporan CPL berhasil diunduh!", "success");
-            
-            const reportData = `SICPL - PORTAL MAHASISWA\n=========================\nLaporan Capaian Pembelajaran Lulusan (CPL)\n\nMahasiswa: Ahmad Fadli\nNIM: I0320045\nProdi: Teknik Industri UNS\nIPK Kumulatif: 3.75\n\nRingkasan CPL:\n- CPL Tercapai: 6/10\n- Belum Tercapai: 2/10\n- Belum Ditempuh: 2/10\n- Rata-rata Nilai CPL: 85.00\n\nRincian Nilai CPL:\n` + 
+
+            const reportData = `SICPL - PORTAL MAHASISWA\n=========================\nLaporan Capaian Pembelajaran Lulusan (CPL)\n\nMahasiswa: Ahmad Fadli\nNIM: I0320045\nProdi: Teknik Industri UNS\nIPK Kumulatif: 3.75\n\nRingkasan CPL:\n- CPL Tercapai: 6/10\n- Belum Tercapai: 2/10\n- Belum Ditempuh: 2/10\n- Rata-rata Nilai CPL: 85.00\n\nRincian Nilai CPL:\n` +
               cplListInitial.map(c => `- ${c.code}: ${c.score !== null ? c.score : "Belum Ditempuh"} (${c.status.toUpperCase().replace('_', ' ')})`).join("\n");
-            
+
             const blob = new Blob([reportData], { type: "text/plain" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -247,7 +470,7 @@ export default function Home() {
 
       let csvContent = "data:text/csv;charset=utf-8,";
       csvContent += "No,Semester,Kode MK,Nama Mata Kuliah,SKS,UK1,UK2,UK3,UK4,UK5,Nilai Akhir,Nilai Skala 100,Huruf\n";
-      
+
       courseGradesInitial.forEach((g, idx) => {
         const row = [
           idx + 1,
@@ -284,8 +507,8 @@ export default function Home() {
     // 1. Filter by Search input (Course code or Course name)
     if (transcriptSearch.trim() !== "") {
       const q = transcriptSearch.toLowerCase();
-      result = result.filter(g => 
-        g.code.toLowerCase().includes(q) || 
+      result = result.filter(g =>
+        g.code.toLowerCase().includes(q) ||
         g.name.toLowerCase().includes(q)
       );
     }
@@ -348,9 +571,8 @@ export default function Home() {
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center p-4 rounded-xl shadow-xl bg-white border border-slate-100 text-slate-800 animate-bounce transition-all duration-300">
           <div
-            className={`w-3 h-10 rounded-full mr-3.5 ${
-              toast.type === "success" ? "bg-emerald-500" : toast.type === "error" ? "bg-rose-500" : "bg-sky-500"
-            }`}
+            className={`w-3 h-10 rounded-full mr-3.5 ${toast.type === "success" ? "bg-emerald-500" : toast.type === "error" ? "bg-rose-500" : "bg-sky-500"
+              }`}
           />
           <div>
             <p className="text-xs font-extrabold tracking-wide uppercase text-slate-400">Notifikasi</p>
@@ -371,7 +593,7 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          
+
           <div className="flex items-baseline gap-2">
             <span className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-amber-400 to-amber-300 bg-clip-text text-transparent">
               SICPL - Portal Mahasiswa
@@ -464,9 +686,8 @@ export default function Home() {
 
         {/* --- SIDEBAR LEFT --- */}
         <aside
-          className={`bg-white border-r border-slate-200 shrink-0 w-64 md:w-72 flex flex-col justify-between transition-all duration-300 z-40 absolute md:relative inset-y-0 left-0 md:translate-x-0 ${
-            isMobileMenuOpen ? "translate-x-0 pt-16 md:pt-0" : "-translate-x-full"
-          }`}
+          className={`bg-white border-r border-slate-200 shrink-0 w-64 md:w-72 flex flex-col justify-between transition-all duration-300 z-40 absolute md:relative inset-y-0 left-0 md:translate-x-0 ${isMobileMenuOpen ? "translate-x-0 pt-16 md:pt-0" : "-translate-x-full"
+            }`}
         >
           <div className="p-4 space-y-2">
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 px-3 py-2">Navigasi Utama</p>
@@ -491,6 +712,16 @@ export default function Home() {
                   ),
                 },
                 {
+                  id: "profil-lulusan",
+                  label: "Profil Lulusan",
+                  icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                    </svg>
+                  ),
+                },
+                {
                   id: "riwayat-nilai",
                   label: "Riwayat Nilai",
                   icon: (
@@ -505,15 +736,14 @@ export default function Home() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      setActiveTab(item.id as any);
+                      setActiveTab(item.id as "dashboard" | "detail-cpl" | "riwayat-nilai" | "profil-lulusan");
                       setIsMobileMenuOpen(false);
                       triggerToast(`Berpindah ke halaman ${item.label}`, "success");
                     }}
-                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all border-l-4 cursor-pointer ${
-                      isActive
-                        ? "bg-indigo-50 border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                    }`}
+                    className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all border-l-4 cursor-pointer ${isActive
+                      ? "bg-indigo-50 border-indigo-600 text-indigo-700"
+                      : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                      }`}
                   >
                     {item.icon}
                     <span>{item.label}</span>
@@ -603,9 +833,8 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "tercapai" ? null : "tercapai")}
-                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
-                    highlightedStat === "tercapai" ? "ring-2 ring-emerald-500 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
-                  }`}
+                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${highlightedStat === "tercapai" ? "ring-2 ring-emerald-500 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
+                    }`}
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">CPL Tercapai</p>
@@ -621,9 +850,8 @@ export default function Home() {
 
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "belum_tercapai" ? null : "belum_tercapai")}
-                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
-                    highlightedStat === "belum_tercapai" ? "ring-2 ring-rose-500 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
-                  }`}
+                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${highlightedStat === "belum_tercapai" ? "ring-2 ring-rose-500 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
+                    }`}
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Belum Tercapai</p>
@@ -639,9 +867,8 @@ export default function Home() {
 
                 <div
                   onClick={() => setHighlightedStat(highlightedStat === "belum_ditempuh" ? null : "belum_ditempuh")}
-                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${
-                    highlightedStat === "belum_ditempuh" ? "ring-2 ring-slate-400 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
-                  }`}
+                  className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center justify-between transition-all duration-200 cursor-pointer ${highlightedStat === "belum_ditempuh" ? "ring-2 ring-slate-400 scale-[1.02]" : "border-slate-200 hover:scale-[1.01]"
+                    }`}
                 >
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Belum Ditempuh</p>
@@ -714,7 +941,7 @@ export default function Home() {
                       const scoreVal = cpl.score ?? 0;
                       const heightPercent = `${scoreVal}%`;
                       const isHighlighted = highlightedStat === null || cpl.status === highlightedStat;
-                      
+
                       return (
                         <div
                           key={cpl.id}
@@ -732,11 +959,10 @@ export default function Home() {
                                 });
                               }}
                               onMouseLeave={() => setHoveredCpl(null)}
-                              className={`w-full rounded-t-lg transition-all duration-500 ease-out cursor-pointer relative shadow-sm ${
-                                isHighlighted
-                                  ? "bg-indigo-500/90 group-hover:bg-indigo-600 shadow-indigo-100 group-hover:scale-x-105 group-hover:shadow-md"
-                                  : "bg-indigo-200/40 opacity-30"
-                              }`}
+                              className={`w-full rounded-t-lg transition-all duration-500 ease-out cursor-pointer relative shadow-sm ${isHighlighted
+                                ? "bg-indigo-500/90 group-hover:bg-indigo-600 shadow-indigo-100 group-hover:scale-x-105 group-hover:shadow-md"
+                                : "bg-indigo-200/40 opacity-30"
+                                }`}
                             >
                               <div className="absolute top-0 inset-x-0 h-1.5 rounded-t-lg bg-indigo-300/40" />
                               <span className="absolute -top-6 inset-x-0 text-[10px] font-black text-center text-indigo-700 tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -745,18 +971,16 @@ export default function Home() {
                             </div>
                           ) : (
                             <div
-                              className={`w-full h-[15%] border-2 border-dashed rounded-t-lg bg-slate-50 transition-all duration-300 flex items-center justify-center ${
-                                isHighlighted ? "border-slate-300" : "border-slate-200/50 opacity-30"
-                              }`}
+                              className={`w-full h-[15%] border-2 border-dashed rounded-t-lg bg-slate-50 transition-all duration-300 flex items-center justify-center ${isHighlighted ? "border-slate-300" : "border-slate-200/50 opacity-30"
+                                }`}
                               title="Belum Ditempuh"
                             >
                               <span className="text-[9px] font-black text-slate-400 tracking-wider">-</span>
                             </div>
                           )}
 
-                          <span className={`absolute -bottom-6 text-[10px] font-extrabold tracking-tight transition-colors duration-200 ${
-                            hasScore ? "text-slate-600 group-hover:text-indigo-700" : "text-slate-400"
-                          }`}>
+                          <span className={`absolute -bottom-6 text-[10px] font-extrabold tracking-tight transition-colors duration-200 ${hasScore ? "text-slate-600 group-hover:text-indigo-700" : "text-slate-400"
+                            }`}>
                             {cpl.code}
                           </span>
                         </div>
@@ -806,6 +1030,319 @@ export default function Home() {
                   )}
                 </div>
               </div>
+
+                {/* --- 4. GRADUATE PROFILE ACHIEVEMENT CHART CARD --- */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6 space-y-6 relative">
+                  <div>
+                    <h3 className="text-base md:text-lg font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                      <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                      </svg>
+                      Grafik Capaian Profil Lulusan
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-snug">
+                      Rata-rata nilai CPL yang mendukung masing-masing profil kelulusan. Garis putus-putus merah menunjukkan target kelulusan minimum (80).
+                    </p>
+                  </div>
+
+                  <div className="space-y-6 relative pt-4">
+                    {/* Vertical line indicator at 80% */}
+                    <div className="absolute top-0 bottom-0 left-[80%] border-l-2 border-dashed border-rose-500 z-10 pointer-events-none hidden sm:block">
+                      <span className="absolute -top-4 right-1 text-[8px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-extrabold border border-rose-200 tracking-wider">
+                        TARGET: 80
+                      </span>
+                    </div>
+
+                    <div className="space-y-5 relative z-20">
+                      {graduateProfiles.map((profile) => {
+                        const score = calculateProfileScore(profile.cpls);
+                        const isAchieved = score !== null && score >= 80;
+
+                        return (
+                          <div key={profile.id} className="space-y-2 group bg-slate-50/50 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="space-y-0.5">
+                                <h4 className="text-xs md:text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                                  {profile.title}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 font-semibold line-clamp-1">
+                                  {profile.description}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {score !== null ? (
+                                  <>
+                                    <span className="text-[10px] font-extrabold text-slate-500">Rerata:</span>
+                                    <span className={`text-xs md:text-sm font-black ${isAchieved ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                      {score}/100
+                                    </span>
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${isAchieved
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                                      : "bg-rose-50 text-rose-700 border border-rose-100"
+                                      }`}>
+                                      {isAchieved ? "TERCAPAI" : "BELUM TERCAPAI"}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                    BELUM DITEMPUH
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Bar representation */}
+                            <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
+                              {score !== null ? (
+                                <div
+                                  style={{ width: `${score}%` }}
+                                  className={`h-full rounded-full transition-all duration-1000 ease-out ${isAchieved
+                                    ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                                    : "bg-gradient-to-r from-amber-500 to-rose-500"
+                                    }`}
+                                />
+                              ) : (
+                                <div className="w-full h-full border-2 border-dashed border-slate-300 rounded-full bg-slate-50/50" />
+                              )}
+                            </div>
+
+                            {/* Mapped CPL Contributing tag list */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">CPL Terkait:</span>
+                              {profile.cpls.map((cplCode) => {
+                                const cplData = cplListInitial.find(c => c.code === cplCode);
+                                const cplScore = cplData?.score;
+                                const cplStatus = cplData?.status;
+                                return (
+                                  <span
+                                    key={cplCode}
+                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 border transition-colors ${cplStatus === "tercapai"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100"
+                                      : cplStatus === "belum_tercapai"
+                                        ? "bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100"
+                                        : "bg-slate-50 text-slate-400 border-slate-200/60 hover:bg-slate-100"
+                                      }`}
+                                    title={cplData?.name}
+                                  >
+                                    <span>{cplCode}</span>
+                                    {cplScore !== null && cplScore !== undefined && (
+                                      <span className="opacity-70 font-black">({cplScore})</span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* TAB: PROFIL LULUSAN */}
+          {activeTab === "profil-lulusan" && (
+            <div className="space-y-6 animate-fadeIn">
+              <div>
+                <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-800">Profil Lulusan & Integrasi CPL</h2>
+                <p className="text-xs text-slate-500 mt-1 leading-snug">
+                  Evaluasi keterkaitan terintegrasi antara 10 Capaian Pembelajaran Lulusan (CPL) Kurikulum 2024 dengan 4 Profil Kelulusan PSTI UNS.
+                </p>
+              </div>
+
+              {/* Grid 2x2: Graduate Profile Cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {graduateProfiles.map((profile) => {
+                  const score = calculateProfileScore(profile.cpls);
+                  const isAchieved = score !== null && score >= 80;
+
+                  // Define career prospects / details for extra premium touch
+                  const careerInfo = [
+                    "Kandidat Peneliti, R&D Engineer, Akademisi, Konsultan Ilmiah Kerekayasaan.",
+                    "Sistem Perancang Terintegrasi, Quality Controller, Supply Chain/Logistics Analyst, Operations Manager.",
+                    "Professional Engineer, Project Manager, Auditor Sistem Industri, Konsultan Manajemen.",
+                    "Inovator Industri, Lead Coordinator, Technopreneur, Continuous Improvement Specialist."
+                  ][profile.id - 1];
+
+                  return (
+                    <div
+                      key={profile.id}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between space-y-4 hover:shadow-md transition-all duration-300 relative overflow-hidden group"
+                    >
+                      {/* Decorative colored top border */}
+                      <div className={`absolute top-0 inset-x-0 h-1.5 ${score === null
+                        ? "bg-slate-300"
+                        : isAchieved
+                          ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                          : "bg-gradient-to-r from-amber-500 to-rose-500"
+                        }`} />
+
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                              Profil Lulusan {profile.id}
+                            </span>
+                            <h3 className="text-sm md:text-base font-black text-slate-800 mt-1.5 leading-snug">
+                              {profile.alias}
+                            </h3>
+                          </div>
+
+                          {/* Large score display */}
+                          <div className="text-right shrink-0">
+                            {score !== null ? (
+                              <div className="flex flex-col items-end">
+                                <div className={`text-xl md:text-2xl font-black ${isAchieved ? "text-emerald-600" : "text-amber-600"}`}>
+                                  {score}%
+                                </div>
+                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full tracking-wider mt-0.5 uppercase border ${isAchieved
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                  : "bg-rose-50 text-rose-700 border-rose-100"
+                                  }`}>
+                                  {isAchieved ? "TERCAPAI" : "PERLU PERBAIKAN"}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-right">
+                                <div className="text-xs font-bold text-slate-400 uppercase">BELUM</div>
+                                <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                  DITEMPUH
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          {profile.description}
+                        </p>
+
+                        <div className="border-t border-slate-100 pt-3">
+                          <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Rekomendasi Karir:</p>
+                          <p className="text-[10px] text-slate-500 italic leading-snug">
+                            {careerInfo}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Contributing CPL Breakdown list */}
+                      <div className="pt-3 border-t border-slate-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">CPL Terintegrasi ({profile.cpls.length})</span>
+                          {score !== null && (
+                            <span className="text-[9px] text-slate-500 font-semibold">
+                              Target Capaian: &ge; 80
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {profile.cpls.map((cplCode) => {
+                            const cpl = cplListInitial.find((c) => c.code === cplCode);
+                            const cplScore = cpl?.score;
+                            const cplStatus = cpl?.status;
+
+                            return (
+                              <div
+                                key={cplCode}
+                                className={`p-2 rounded-xl border flex items-center justify-between text-[11px] font-bold ${cplStatus === "tercapai"
+                                  ? "bg-emerald-50/50 border-emerald-100 text-emerald-800"
+                                  : cplStatus === "belum_tercapai"
+                                    ? "bg-rose-50/50 border-rose-100 text-rose-800"
+                                    : "bg-slate-50 border-slate-100 text-slate-400"
+                                  }`}
+                              >
+                                <span className="truncate max-w-[80px]" title={cpl?.name}>
+                                  {cplCode}
+                                </span>
+                                <span className="text-[10px] font-black">
+                                  {cplScore !== null ? `${cplScore}` : "-"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Matriks Keterkaitan (Matrix Mapping Table) */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <div>
+                  <h3 className="text-base md:text-lg font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                    <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Matriks Keterkaitan Profil – Capaian Pembelajaran Lulusan (CPL)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">
+                    Tabel matriks resmi pemetaan 10 Capaian Pembelajaran Lulusan (CPL) Kurikulum 2024 terhadap 4 Profil Kelulusan PSTI UNS beserta status dan nilai aktual Anda.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold text-[10px] uppercase tracking-wider">
+                        <th className="p-4 font-black">Capaian Pembelajaran Lulusan (CPL)</th>
+                        <th className="p-4 text-center border-l border-slate-200 w-28">Profil 1<br /><span className="text-[8px] font-medium text-slate-400 capitalize">Kreatif/Ilmiah</span></th>
+                        <th className="p-4 text-center border-l border-slate-200 w-28">Profil 2<br /><span className="text-[8px] font-medium text-slate-400 capitalize">Sistem/Realistis</span></th>
+                        <th className="p-4 text-center border-l border-slate-200 w-28">Profil 3<br /><span className="text-[8px] font-medium text-slate-400 capitalize">Profesional</span></th>
+                        <th className="p-4 text-center border-l border-slate-200 w-28">Profil 4<br /><span className="text-[8px] font-medium text-slate-400 capitalize">Masa Depan</span></th>
+                        <th className="p-4 text-center border-l border-slate-200 w-24">Nilai</th>
+                        <th className="p-4 text-center border-l border-slate-200 w-28">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-150">
+                      {cplListInitial.map((cpl) => (
+                        <tr key={cpl.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-4 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-indigo-600">{cpl.code}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-semibold leading-relaxed max-w-lg">
+                              {cpl.name}
+                            </p>
+                          </td>
+                          {[1, 2, 3, 4].map((profId) => {
+                            const isMapped = graduateProfiles.find(p => p.id === profId)?.cpls.includes(cpl.code);
+                            return (
+                              <td key={profId} className="p-4 text-center border-l border-slate-200">
+                                {isMapped ? (
+                                  <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-300 font-light">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="p-4 text-center border-l border-slate-200 font-extrabold text-slate-700">
+                            {cpl.score !== null ? cpl.score : (
+                              <span className="text-slate-300 font-normal">-</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-center border-l border-slate-200">
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase border tracking-wider ${cpl.status === "tercapai"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : cpl.status === "belum_tercapai"
+                                ? "bg-rose-50 text-rose-700 border-rose-100"
+                                : "bg-slate-100 text-slate-400 border-slate-200"
+                              }`}>
+                              {cpl.status === "tercapai" ? "TERCAPAI" : cpl.status === "belum_tercapai" ? "PERBAIKAN" : "BELUM"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -839,13 +1376,12 @@ export default function Home() {
                             <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 uppercase tracking-widest">
                               {cpl.code}
                             </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                              cpl.status === "tercapai"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                : cpl.status === "belum_tercapai"
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${cpl.status === "tercapai"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                              : cpl.status === "belum_tercapai"
                                 ? "bg-rose-50 text-rose-700 border border-rose-100"
                                 : "bg-slate-100 text-slate-500"
-                            }`}>
+                              }`}>
                               {cpl.status.replace("_", " ")}
                             </span>
                           </div>
@@ -949,7 +1485,7 @@ export default function Home() {
                       <span className="text-slate-800">: 2020</span>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3 md:border-l md:border-slate-100 md:pl-6">
                     <div className="flex items-center">
                       <span className="w-32 text-slate-400 uppercase tracking-wide">Nama</span>
@@ -1084,7 +1620,7 @@ export default function Home() {
                         <th rowSpan={3} className="px-4 py-4 w-28 text-left bg-[#152a42] pl-6">Kode MK</th>
                         <th rowSpan={3} className="px-6 py-4 text-left bg-[#152a42]">Nama Mata Kuliah</th>
                         <th rowSpan={3} className="px-4 py-4 w-14 text-center bg-[#152a42]">SKS</th>
-                        
+
                         {/* Nilai Multi-columns merged */}
                         <th colSpan={8} className="py-2.5 font-black uppercase text-center tracking-widest bg-indigo-900 border-l border-indigo-800/40 text-[10px]">
                           Nilai
@@ -1105,23 +1641,23 @@ export default function Home() {
                       <tr className="text-white font-black text-[9px] border-b border-slate-200">
                         {/* UK1 (TUGAS) - Salmon red */}
                         <th className="py-2.5 w-16 bg-rose-500 border-r border-rose-400/30 uppercase text-center leading-tight">
-                          UK1<br/><span className="text-[8px] opacity-90 font-bold">(TUGAS)</span>
+                          UK1<br /><span className="text-[8px] opacity-90 font-bold">(TUGAS)</span>
                         </th>
                         {/* UK2 (UTS) - Orange */}
                         <th className="py-2.5 w-16 bg-orange-500 border-r border-orange-400/30 uppercase text-center leading-tight">
-                          UK2<br/><span className="text-[8px] opacity-90 font-bold">(UTS)</span>
+                          UK2<br /><span className="text-[8px] opacity-90 font-bold">(UTS)</span>
                         </th>
                         {/* UK3 (UAS) - Green-teal */}
                         <th className="py-2.5 w-16 bg-teal-600 border-r border-teal-500/30 uppercase text-center leading-tight">
-                          UK3<br/><span className="text-[8px] opacity-90 font-bold">(UAS)</span>
+                          UK3<br /><span className="text-[8px] opacity-90 font-bold">(UAS)</span>
                         </th>
                         {/* UK4 (PARTISIPATIF) - Light blue-teal */}
                         <th className="py-2.5 w-16 bg-sky-500 border-r border-sky-400/30 uppercase text-center leading-tight">
-                          UK4<br/><span className="text-[8px] opacity-90 font-bold">(PARTISIPATIF)</span>
+                          UK4<br /><span className="text-[8px] opacity-90 font-bold">(PARTISIPATIF)</span>
                         </th>
                         {/* UK5 (PROYEK) - Indigo */}
                         <th className="py-2.5 w-16 bg-indigo-600 border-r border-indigo-500/30 uppercase text-center leading-tight">
-                          UK5<br/><span className="text-[8px] opacity-90 font-bold">(PROYEK)</span>
+                          UK5<br /><span className="text-[8px] opacity-90 font-bold">(PROYEK)</span>
                         </th>
                       </tr>
                     </thead>
@@ -1150,7 +1686,7 @@ export default function Home() {
                             <td className="px-4 py-4 text-center font-bold text-slate-600">
                               {grade.sks}
                             </td>
-                            
+
                             {/* NILAI DARI SISTEM CELLS */}
                             <td className="px-2 py-4 text-center font-semibold text-slate-500 bg-rose-50/10 border-r border-slate-100">
                               {grade.uk1}
