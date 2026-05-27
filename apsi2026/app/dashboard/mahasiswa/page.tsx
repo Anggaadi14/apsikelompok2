@@ -4,7 +4,7 @@
 import React from "react";
 import { ProtectedRoute } from "@/app/components/ProtectedRoute";
 import { useMahasiswaDashboard } from "@/app/components/mahasiswa/hoks";
-import { Navbar }      from "@/app/components/mahasiswa/navbar";
+import { Navbar }      from "@/app/components/Navbar";
 import { Sidebar }     from "@/app/components/mahasiswa/sidebar";
 import { ProfileCard } from "@/app/components/mahasiswa/profilecard";
 import { DashboardTab } from "@/app/components/mahasiswa/dashboardtab";
@@ -18,11 +18,11 @@ export default function MahasiswaDashboard() {
     <ProtectedRoute allowedRoles={["mahasiswa"]}>
       <div className="size-full flex flex-col bg-gray-50">
 
-        <Navbar
-          selectedSemester={state.selectedSemester}
-          onSemesterChange={state.setSelectedSemester}
-          onLogout={state.handleLogout}
-        />
+      <Navbar
+        selectedSemester={state.selectedSemester}
+        onSemesterChange={state.setSelectedSemester}
+        onLogout={state.handleLogout}
+      />
 
         <div className="flex flex-1 overflow-hidden">
           <Sidebar

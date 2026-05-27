@@ -2,15 +2,16 @@
 
 import React from "react";
 import { ProtectedRoute } from "@/app/components/ProtectedRoute";
-import { DashboardLayout } from "@/app/components/DashboardLayout";
+import { useKaprodiDashboard } from "@/app/components/kaprodi/hooks";
+import { Navbar }      from "@/app/components/Navbar";
 
 export default function KaprodiDashboard() {
+  const state = useKaprodiDashboard();
   return (
     <ProtectedRoute allowedRoles={["kaprodi"]}>
-      <DashboardLayout
-        title="Dashboard Ketua Program Studi"
-        subtitle="Kelola program studi dan data akademik"
-      >
+      <Navbar 
+        onLogout={state.handleLogout} 
+      />
         <div className="p-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {/* Stats Cards */}
@@ -68,7 +69,6 @@ export default function KaprodiDashboard() {
             </button>
           </div>
         </div>
-      </DashboardLayout>
     </ProtectedRoute>
   );
 }
