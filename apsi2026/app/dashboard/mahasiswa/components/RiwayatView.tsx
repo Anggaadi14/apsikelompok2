@@ -209,11 +209,36 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
                 <th className="py-3 px-4 font-bold text-slate-500 w-24">Kode MK</th>
                 <th className="py-3 px-4 font-bold text-slate-500">Nama Mata Kuliah</th>
                 <th className="py-3 px-4 font-bold text-slate-500 w-16 text-center">SKS</th>
-                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">UK1</th>
-                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">UK2</th>
-                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">UK3</th>
-                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">UK4</th>
-                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">UK5</th>
+                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">
+                  <div className="space-y-0.5">
+                    <span>UK1</span>
+                    <span className="text-[10px] text-slate-500">(TUGAS)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">
+                  <div className="space-y-0.5">
+                    <span>UK2</span>
+                    <span className="text-[10px] text-slate-500">(UTS)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">
+                  <div className="space-y-0.5">
+                    <span>UK3</span>
+                    <span className="text-[10px] text-slate-500">(UAS)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">
+                  <div className="space-y-0.5">
+                    <span>UK4</span>
+                    <span className="text-[10px] text-slate-500">(PARTISIPATIF)</span>
+                  </div>
+                </th>
+                <th className="py-3 px-3 font-bold text-slate-500 w-12 text-center bg-slate-100/30">
+                  <div className="space-y-0.5">
+                    <span>UK5</span>
+                    <span className="text-[10px] text-slate-500">(PROYEK)</span>
+                  </div>
+                </th>
                 <th className="py-3 px-4 font-bold text-slate-500 w-24 text-center">Akhir</th>
                 <th className="py-3 px-4 font-bold text-slate-500 w-24 text-center">Skala 100</th>
                 <th className="py-3 px-4 font-bold text-slate-500 w-20 text-center">Huruf</th>
