@@ -58,18 +58,19 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
       <Navbar
-        portalTitle="SICPL - Admin Panel"
-        userName={sessionUser.name}
-        userRole="Administrator"
-        userInitials={sessionUser.initials}
-        onLogout={handleLogout}
+      portalTitle="SICPL - Admin Panel"
+      prodiLabel="Pusat Data Akademik UNS"
+      userName={sessionUser.name}
+      userNimNip={sessionUser.identifier}
+      userInitials={sessionUser.initials}
+      onLogout={handleLogout}
       />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           items={sidebarItems}
-          activeId={activeTab}
-          onSelect={(id) => setActiveTab(id as typeof activeTab)}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
 
         <main className="flex-1 overflow-auto">
