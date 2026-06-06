@@ -62,11 +62,11 @@ export default function LoginPage() {
 
       if (data.success) {
         // Simpan session ke sessionStorage — sama persis dengan format sebelumnya
-        // data.user sudah dalam format UserSession yang benar (dari route.ts)
-        sessionStorage.setItem('currentUser', JSON.stringify(data.user));
+        // data.data sudah dalam format UserSession yang benar (dari route.ts)
+        sessionStorage.setItem('currentUser', JSON.stringify(data.data));
 
         // Redirect ke dashboard sesuai role
-        router.push(`/dashboard/${data.user.role}`);
+        router.push(`/dashboard/${data.data.role}`);
       } else {
         // Tampilkan pesan error dari server
         setError(data.message || 'Username atau password yang Anda masukkan tidak valid.');

@@ -8,10 +8,8 @@
 //       GET /api/mahasiswa/riwayat → riwayatNilaiData
 //   - data.ts tetap ada sebagai fallback jika API gagal (development safety)
 //   - Loading state per tab (dashboard, cpl, riwayat) ditambahkan
-//
-// Yang TIDAK berubah:
-//   - ProfileCard, Navbar, Sidebar → sudah konek API di Tahap 2
-//   - DashboardView, CplView, RiwayatView → tidak ada perubahan komponen
+//   - <CplView /> sekarang menerima prop `profile` agar kartu profil di tab
+//     Report tidak lagi hardcode "Ahmad Fadli / 3.75".
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -22,7 +20,11 @@ import DashboardView from './components/DashboardView';
 import CplView from './components/CplView';
 import RiwayatView from './components/RiwayatView';
 // Fallback jika API gagal (hanya untuk development)
-import { cplData as cplDataFallback, detailCPL as detailCPLFallback, riwayatNilaiData as riwayatFallback } from './data';
+import {
+  cplData as cplDataFallback,
+  detailCPL as detailCPLFallback,
+  riwayatNilaiData as riwayatFallback,
+} from './data';
 import { Home, Award, BookOpen } from 'lucide-react';
 import { UserSession } from '../../data/users';
 import { CplDataItem, DetailCplItem, RiwayatNilaiItem } from './data';
@@ -176,7 +178,6 @@ export default function MahasiswaDashboard() {
       try {
         const result = await fetchWithSession('/api/mahasiswa/cpl');
         if (result.success && result.data) {
-          // Hanya update jika data dari API tidak kosong
           if (result.data.cplData?.length > 0) {
             setCplData(result.data.cplData);
           }
@@ -188,7 +189,6 @@ export default function MahasiswaDashboard() {
         const msg = err instanceof Error ? err.message : 'Gagal memuat data CPL';
         setCplError(msg);
         console.error('[Dashboard] fetch CPL error — pakai fallback data.ts:', err);
-        // Fallback ke data.ts sudah di-set sebagai initial state
       } finally {
         setCplLoading(false);
       }
@@ -230,11 +230,11 @@ export default function MahasiswaDashboard() {
     const displayIpk   = profile?.ipk             ?? 0;
     const displayProdi = profile?.prodi           ?? 'Teknik Industri UNS';
 
-    const tercapaiCount     = cplData.filter((c) => c.status === 'Tercapai').length;
-    const belumTercapai     = cplData.filter((c) => c.status === 'Belum Tercapai').length;
-    const belumDitempuh     = cplData.filter((c) => c.status === 'Belum Ditempuh').length;
-    const nilaiValid        = cplData.filter((c) => c.nilai > 0);
-    const avgCpl            = nilaiValid.length > 0
+    const tercapaiCount = cplData.filter((c) => c.status === 'Tercapai').length;
+    const belumTercapai = cplData.filter((c) => c.status === 'Belum Tercapai').length;
+    const belumDitempuh = cplData.filter((c) => c.status === 'Belum Ditempuh').length;
+    const nilaiValid    = cplData.filter((c) => c.nilai > 0);
+    const avgCpl        = nilaiValid.length > 0
       ? (nilaiValid.reduce((s, c) => s + c.nilai, 0) / nilaiValid.length).toFixed(1)
       : '0.0';
 
@@ -285,13 +285,21 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
 
   // Sidebar items
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard',     icon: <Home    className="w-5 h-5" /> },
-    { id: 'cpl',       label: 'Detail CPL',    icon: <Award   className="w-5 h-5" /> },
+    { id: 'dashboard', label: 'Dashboard',     icon: <Home     className="w-5 h-5" /> },
+    { id: 'cpl',       label: 'Detail CPL',    icon: <Award    className="w-5 h-5" /> },
     { id: 'riwayat',   label: 'Riwayat Nilai', icon: <BookOpen className="w-5 h-5" /> },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (!sessionUser) return <LoadingSpinner />;
+
+  // Profile yang diteruskan ke CplView (Report tab) — fallback aman ke session
+  const cplProfile = {
+    nama:  profile?.nama_mahasiswa ?? sessionUser.name,
+    nim:   profile?.nim             ?? sessionUser.identifier,
+    prodi: profile?.prodi           ?? 'TI UNS',
+    ipk:   profile?.ipk             ?? 0,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
@@ -304,7 +312,7 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
         selectedSemester={selectedSemester}
         setSelectedSemester={setSelectedSemester}
         availableSemesters={availableSemesters}
-        notificationsCount={cplData.filter(c => c.status === 'Belum Tercapai').length}
+        notificationsCount={cplData.filter((c) => c.status === 'Belum Tercapai').length}
         onLogout={handleLogout}
       />
 
@@ -322,12 +330,22 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
             </div>
           )}
 
-          {/* Error banner CPL (tidak memblokir halaman) */}
+          {/* Error banner CPL */}
           {cplError && (
             <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
               ⚠️ Data CPL diambil dari sumber fallback (data.ts).
               {process.env.NODE_ENV === 'development' && (
                 <span className="ml-1 text-orange-500">({cplError})</span>
+              )}
+            </div>
+          )}
+
+          {/* Error banner riwayat */}
+          {riwayatError && (
+            <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+              ⚠️ Riwayat nilai diambil dari sumber fallback (data.ts).
+              {process.env.NODE_ENV === 'development' && (
+                <span className="ml-1 text-orange-500">({riwayatError})</span>
               )}
             </div>
           )}
@@ -342,14 +360,13 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
             onDownloadReport={handleDownloadReport}
           />
 
-          {/* Loading profil kecil */}
           {profileLoading && (
             <p className="text-xs text-gray-400 text-center mt-1 mb-2">
               Memuat data profil...
             </p>
           )}
 
-          {/* Tab views — sekarang pakai data dari API */}
+          {/* Tab views */}
           <div className="transition-all duration-300">
             {activeTab === 'dashboard' && (
               cplLoading
@@ -359,7 +376,7 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
             {activeTab === 'cpl' && (
               cplLoading
                 ? <TabLoading message="Memuat detail IK dan CPMK..." />
-                : <CplView cplData={cplData} detailCplData={detailCpl} />
+                : <CplView cplData={cplData} detailCplData={detailCpl} profile={cplProfile} />
             )}
             {activeTab === 'riwayat' && (
               riwayatLoading

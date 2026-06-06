@@ -1,342 +1,250 @@
-// app/api/mahasiswa/cpl/route.ts
-//
-// ENDPOINT: GET /api/mahasiswa/cpl
-//
-// Mengembalikan data CPL lengkap untuk mahasiswa yang sedang login,
-// dihitung dari database melalui rantai:
-//   nilai_detail → komponen → CPMK → IK → CPL
-//
-// RUMUS PERHITUNGAN:
-//   1. Nilai CPMK = rata-rata nilai_asli dari semua komponen yang mapping ke CPMK tersebut
-//   2. Nilai IK   = Σ (nilai_CPMK × bobot_cpmk_persen / 100)
-//   3. Nilai CPL  = Σ (nilai_IK   × bobot_ik_persen   / 100)
-//
-// RESPONSE FORMAT (sesuai CplDataItem & DetailCplItem di data.ts):
-// {
-//   success: true,
-//   data: {
-//     cplData: CplDataItem[],       // untuk DashboardView & bar chart
-//     detailCpl: DetailCplItem[],   // untuk CplView dengan breakdown IK & CPMK
-//   }
-// }
-//
-// AUTH: membaca X-User-Session header (dikirim oleh fetchWithSession di page.tsx)
+import { NextRequest, NextResponse } from 'next/server'
+import { getDb } from '@/app/lib/db'
+import { handleAuthError, requireRole } from '@/app/lib/auth'
 
-import { NextRequest } from 'next/server';
-import { getDb } from '@/app/lib/db';
-import type mysql from 'mysql2/promise';
-
-// ─────────────────────────────────────────────
-// Tipe internal (hasil query DB)
-// ─────────────────────────────────────────────
-
-interface CplRow {
-  id_cpl: number;
-  kode_cpl: string;
-  deskripsi: string;
+interface CplDataItem {
+  name: string
+  nilai: number
+  target: number
+  status: 'Tercapai' | 'Belum Tercapai' | 'Belum Ditempuh'
+  kategori: string
 }
 
-interface IkRow {
-  id_ik: number;
-  id_cpl: number;
-  kode_ik: string;
-  deskripsi: string;
-  bobot_ik_persen: number;
+interface CpmkItem {
+  kode: string
+  deskripsi: string
+  bobot: number
+  nilai: number
+  matakuliah: string
+  semester: string
+  nilaiMK: number
 }
 
-interface CpmkMappingRow {
-  id_cpmk: number;
-  id_ik: number;
-  kode_cpmk: string;
-  bobot_cpmk_persen: number;
-  id_mk: number;
-  kode_mk: string;
-  nama_mk: string;
-  plot_semester: number;
+interface IkItem {
+  kode: string
+  deskripsi: string
+  bobot: number
+  nilai: number
+  cpmk: CpmkItem[]
 }
 
-interface NilaiRow {
-  id_cpmk: number;
-  rata_nilai: number;
+interface DetailCplItem {
+  cpl: string
+  deskripsi: string
+  nilai: number
+  status: 'Tercapai' | 'Belum Tercapai' | 'Belum Ditempuh'
+  ik: IkItem[]
 }
 
-interface KategoriCpl {
-  [key: string]: string;
-}
-
-// ─────────────────────────────────────────────
-// Kategori CPL (tetap, sesuai kurikulum)
-// ─────────────────────────────────────────────
-const KATEGORI_CPL: KategoriCpl = {
-  'CPL-1':  'Pengetahuan',
-  'CPL-2':  'Keterampilan Khusus',
-  'CPL-3':  'Keterampilan Umum',
-  'CPL-4':  'Keterampilan Khusus',
-  'CPL-5':  'Keterampilan Umum',
-  'CPL-6':  'Sikap',
-  'CPL-7':  'Keterampilan Umum',
-  'CPL-8':  'Pengetahuan',
-  'CPL-9':  'Sikap',
-  'CPL-10': 'Keterampilan Khusus',
-};
-
-// ─────────────────────────────────────────────
-// Konversi nilai angka → huruf mutu
-// ─────────────────────────────────────────────
-function nilaiToHuruf(nilai: number): string {
-  if (nilai >= 87)      return 'A';
-  if (nilai >= 82)      return 'A-';
-  if (nilai >= 78)      return 'B+';
-  if (nilai >= 74)      return 'B';
-  if (nilai >= 70)      return 'B-';
-  if (nilai >= 65)      return 'C+';
-  if (nilai >= 60)      return 'C';
-  if (nilai >= 55)      return 'D';
-  return 'E';
-}
-
-// ─────────────────────────────────────────────
-// HANDLER UTAMA
-// ─────────────────────────────────────────────
-export async function GET(request: NextRequest) {
-  // ── Auth: baca session dari header ─────────────────────────────────────
-  const sessionHeader = request.headers.get('X-User-Session');
-  if (!sessionHeader) {
-    return Response.json(
-      { success: false, error: 'UNAUTHORIZED', message: 'Session tidak ditemukan.' },
-      { status: 401 }
-    );
-  }
-
-  let session: { id: string; role: string };
+export async function GET(req: NextRequest) {
   try {
-    session = JSON.parse(sessionHeader);
-  } catch {
-    return Response.json(
-      { success: false, error: 'INVALID_SESSION', message: 'Format session tidak valid.' },
-      { status: 401 }
-    );
-  }
+    const session = await requireRole(req, ['mahasiswa'])
+    const idMahasiswa = session.id
+    const db = getDb()
 
-  if (session.role !== 'mahasiswa') {
-    return Response.json(
-      { success: false, error: 'FORBIDDEN', message: 'Endpoint ini hanya untuk mahasiswa.' },
-      { status: 403 }
-    );
-  }
+    // 1. Ambil daftar CPL (defensif: kolom kategori opsional)
+    let cplRows: any[]
+    try {
+      const [rs] = await db.execute(
+        'SELECT id_cpl, kode_cpl, deskripsi, kategori FROM cpl ORDER BY kode_cpl',
+      )
+      cplRows = rs as any[]
+    } catch {
+      const [rs] = await db.execute(
+        'SELECT id_cpl, kode_cpl, deskripsi FROM cpl ORDER BY kode_cpl',
+      )
+      cplRows = (rs as any[]).map((r) => ({ ...r, kategori: null }))
+    }
 
-  // Ekstrak id_mahasiswa dari session.id ("mhs_{id}")
-  const idMahasiswa = parseInt(session.id.replace('mhs_', ''), 10);
-  if (isNaN(idMahasiswa)) {
-    return Response.json(
-      { success: false, error: 'INVALID_SESSION', message: 'ID mahasiswa tidak valid.' },
-      { status: 400 }
-    );
-  }
+    if (cplRows.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: { cplData: [], detailCpl: [] },
+      })
+    }
 
-  try {
-    const db = getDb();
-
-    // ── STEP 1: Ambil semua CPL ───────────────────────────────────────────
-    const [cplRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT id_cpl, kode_cpl, deskripsi FROM cpl ORDER BY id_cpl`
-    );
-    const cpls = cplRows as CplRow[];
-
-    // ── STEP 2: Ambil semua IK beserta bobot ke CPL ───────────────────────
-    const [ikRows] = await db.query<mysql.RowDataPacket[]>(
+    // 2. IK + mapping ke CPL
+    const [ikRows] = await db.execute(
       `SELECT id_ik, id_cpl, kode_ik, deskripsi, bobot_ik_persen
-       FROM mapping_ik_cpl
-       ORDER BY id_cpl, id_ik`
-    );
-    const iks = ikRows as IkRow[];
+       FROM mapping_ik_cpl ORDER BY kode_ik`,
+    )
 
-    // ── STEP 3: Ambil semua CPMK yang ter-mapping ke IK ──────────────────
-    const [cpmkRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT
-          mci.id_cpmk,
-          mci.id_ik,
-          c.kode_cpmk,
-          mci.bobot_cpmk_persen,
-          mk.id_mk,
-          mk.kode_mk,
-          mk.nama_mk,
-          mk.plot_semester
-       FROM mapping_cpmk_ik mci
-       JOIN cpmk c ON c.id_cpmk = mci.id_cpmk
-       JOIN mata_kuliah mk ON mk.id_mk = c.id_mk
-       ORDER BY mci.id_ik, mci.id_cpmk`
-    );
-    const cpmkMappings = cpmkRows as CpmkMappingRow[];
-
-    // ── STEP 4: Hitung nilai rata-rata per CPMK untuk mahasiswa ini ───────
-    // Nilai CPMK = rata-rata nilai_asli dari semua komponen yang mapping ke CPMK
-    const [nilaiRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT
-          mkc.id_cpmk,
-          AVG(nd.nilai_asli) AS rata_nilai
-       FROM nilai_detail nd
-       JOIN komponen_nilai kn ON kn.id_komponen = nd.id_komponen
-       JOIN mapping_komponen_cpmk mkc ON mkc.id_komponen = kn.id_komponen
-       WHERE nd.id_mahasiswa = ?
-       GROUP BY mkc.id_cpmk`,
-      [idMahasiswa]
-    );
-
-    // Build lookup map: id_cpmk → rata_nilai
-    const nilaiCpmkMap = new Map<number, number>();
-    for (const row of nilaiRows as NilaiRow[]) {
-      nilaiCpmkMap.set(row.id_cpmk, Number(row.rata_nilai));
+    // 3. Target capaian per IK (tahun_akademik terbaru)
+    const [targetRows] = await db.execute(
+      `SELECT id_ik, MAX(tahun_akademik) AS tahun_akademik,
+              MAX(nilai_target_minimal) AS nilai_target_minimal
+       FROM target_capaian GROUP BY id_ik`,
+    )
+    const targetMap = new Map<number, number>()
+    for (const r of targetRows as any[]) {
+      targetMap.set(r.id_ik, Number(r.nilai_target_minimal))
     }
 
-    // ── STEP 5: Hitung nilai IK dari CPMK yang ter-mapping ───────────────
-    // Group cpmkMappings by id_ik
-    const cpmkByIk = new Map<number, CpmkMappingRow[]>();
-    for (const row of cpmkMappings) {
-      if (!cpmkByIk.has(row.id_ik)) cpmkByIk.set(row.id_ik, []);
-      cpmkByIk.get(row.id_ik)!.push(row);
+    // 4. Mapping CPMK→IK + CPMK detail + MK (defensif: kolom deskripsi opsional)
+    let cpmkRows: any[] = []
+    try {
+      const [rs] = await db.execute(
+        `SELECT mci.id_ik, mci.bobot_cpmk_persen,
+                c.id_cpmk, c.kode_cpmk, c.deskripsi AS deskripsi_cpmk,
+                mk.id_mk, mk.kode_mk, mk.nama_mk, mk.sks, mk.plot_semester
+         FROM mapping_cpmk_ik mci
+         JOIN cpmk c ON c.id_cpmk = mci.id_cpmk
+         JOIN mata_kuliah mk ON mk.id_mk = c.id_mk`,
+      )
+      cpmkRows = rs as any[]
+    } catch {
+      const [rs] = await db.execute(
+        `SELECT mci.id_ik, mci.bobot_cpmk_persen,
+                c.id_cpmk, c.kode_cpmk,
+                mk.id_mk, mk.kode_mk, mk.nama_mk, mk.sks, mk.plot_semester
+         FROM mapping_cpmk_ik mci
+         JOIN cpmk c ON c.id_cpmk = mci.id_cpmk
+         JOIN mata_kuliah mk ON mk.id_mk = c.id_mk`,
+      )
+      cpmkRows = (rs as any[]).map((r) => ({ ...r, deskripsi_cpmk: '' }))
     }
 
-    // Nilai IK = Σ (nilaiCpmk × bobot / 100)
-    const nilaiIkMap = new Map<number, number>(); // id_ik → nilai
-    for (const ik of iks) {
-      const cpmksForIk = cpmkByIk.get(ik.id_ik) ?? [];
-      if (cpmksForIk.length === 0) {
-        nilaiIkMap.set(ik.id_ik, 0);
-        continue;
-      }
+    // 5. Nilai per komponen → CPMK untuk mahasiswa ini
+    const [nilaiRows] = await db.execute(
+      `SELECT mkc.id_cpmk, mkc.bobot_media_asesmen,
+              nd.nilai_asli, nd.nilai_remedi
+       FROM mapping_komponen_cpmk mkc
+       JOIN komponen_nilai kn ON kn.id_komponen = mkc.id_komponen
+       LEFT JOIN nilai_detail nd
+         ON nd.id_komponen = mkc.id_komponen
+        AND nd.id_mahasiswa = ?`,
+      [idMahasiswa],
+    )
 
-      let totalBobotAda = 0;
-      let nilaiIk = 0;
-      for (const cpmk of cpmksForIk) {
-        const nilaiCpmk = nilaiCpmkMap.get(cpmk.id_cpmk) ?? 0;
-        nilaiIk += nilaiCpmk * (cpmk.bobot_cpmk_persen / 100);
-        if (nilaiCpmk > 0) totalBobotAda += cpmk.bobot_cpmk_persen;
-      }
-
-      // Jika tidak semua CPMK punya nilai: proporsi ulang ke bobot yang ada
-      const totalBobot = cpmksForIk.reduce((s, c) => s + c.bobot_cpmk_persen, 0);
-      if (totalBobotAda > 0 && totalBobotAda < totalBobot) {
-        // Ada sebagian yang belum ditempuh → skala ulang (jangan bagi 0)
-        nilaiIk = (nilaiIk / totalBobotAda) * 100;
-        // Tapi tandai sebagai partial — untuk display IK tetap pakai nilaiIk asli
-        // agar tidak menipu; kita gunakan normalisasi sederhana
-        nilaiIk = nilaiIk * (totalBobotAda / 100);
-      }
-
-      nilaiIkMap.set(ik.id_ik, Math.round(nilaiIk * 10) / 10);
+    // Build helper maps
+    const ikByCpl = new Map<number, any[]>()
+    for (const ik of ikRows as any[]) {
+      if (!ikByCpl.has(ik.id_cpl)) ikByCpl.set(ik.id_cpl, [])
+      ikByCpl.get(ik.id_cpl)!.push(ik)
     }
 
-    // ── STEP 6: Hitung nilai CPL dari IK ─────────────────────────────────
-    // Group iks by id_cpl
-    const ikByCpl = new Map<number, IkRow[]>();
-    for (const ik of iks) {
-      if (!ikByCpl.has(ik.id_cpl)) ikByCpl.set(ik.id_cpl, []);
-      ikByCpl.get(ik.id_cpl)!.push(ik);
+    const cpmkByIk = new Map<number, any[]>()
+    for (const c of cpmkRows) {
+      if (!cpmkByIk.has(c.id_ik)) cpmkByIk.set(c.id_ik, [])
+      cpmkByIk.get(c.id_ik)!.push(c)
     }
 
-    // Nilai CPL = Σ (nilaiIk × bobot_ik / 100)
-    // ── STEP 7: Build response ─────────────────────────────────────────────
-    const TARGET_MIN = 80;
+    // Nilai CPMK = Σ(efektif × bobot_media_asesmen/100)
+    const nilaiCpmkMap = new Map<number, number>()
+    const tertempuhCpmk = new Set<number>()
+    for (const n of nilaiRows as any[]) {
+      const efektif =
+        n.nilai_remedi != null
+          ? Number(n.nilai_remedi)
+          : n.nilai_asli != null
+          ? Number(n.nilai_asli)
+          : null
+      if (efektif == null) continue
+      tertempuhCpmk.add(n.id_cpmk)
+      const kontrib = efektif * (Number(n.bobot_media_asesmen) / 100)
+      nilaiCpmkMap.set(n.id_cpmk, (nilaiCpmkMap.get(n.id_cpmk) ?? 0) + kontrib)
+    }
 
-    // 7a. cplData (flat, untuk DashboardView)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cplData: any[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const detailCpl: any[] = [];
+    // Rata-rata nilai CPMK per MK (untuk tampilan nilaiMK di UI)
+    const nilaiMkMap = new Map<number, { sum: number; count: number }>()
+    for (const c of cpmkRows) {
+      if (!tertempuhCpmk.has(c.id_cpmk)) continue
+      const nilai = nilaiCpmkMap.get(c.id_cpmk) ?? 0
+      const cur = nilaiMkMap.get(c.id_mk) ?? { sum: 0, count: 0 }
+      cur.sum += nilai
+      cur.count += 1
+      nilaiMkMap.set(c.id_mk, cur)
+    }
 
-    for (const cpl of cpls) {
-      const iksForCpl = ikByCpl.get(cpl.id_cpl) ?? [];
+    const cplData: CplDataItem[] = []
+    const detailCpl: DetailCplItem[] = []
 
-      let nilaiCpl = 0;
-      let hasAnyValue = false;
+    for (const cpl of cplRows) {
+      const iks = ikByCpl.get(cpl.id_cpl) ?? []
+      let nilaiCpl = 0
+      let targetCpl = 0
+      let adaTertempuh = false
+      const ikList: IkItem[] = []
 
-      // Build detail IK
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ikDetails: any[] = [];
+      for (const ik of iks) {
+        const cpmks = cpmkByIk.get(ik.id_ik) ?? []
+        let nilaiIk = 0
+        const cpmkList: CpmkItem[] = []
 
-      for (const ik of iksForCpl) {
-        const nilaiIk = nilaiIkMap.get(ik.id_ik) ?? 0;
-        if (nilaiIk > 0) hasAnyValue = true;
+        for (const c of cpmks) {
+          const nilaiCpmk = nilaiCpmkMap.get(c.id_cpmk) ?? 0
+          const tertempuh = tertempuhCpmk.has(c.id_cpmk)
+          if (tertempuh) adaTertempuh = true
+          nilaiIk += nilaiCpmk * (Number(c.bobot_cpmk_persen) / 100)
 
-        // Build CPMK detail untuk IK ini
-        const cpmksForIk = cpmkByIk.get(ik.id_ik) ?? [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cpmkDetails: any[] = [];
+          const mkAgg = nilaiMkMap.get(c.id_mk)
+          const nilaiMK = mkAgg ? mkAgg.sum / mkAgg.count : 0
 
-        for (const cpmk of cpmksForIk) {
-          const nilaiCpmk = nilaiCpmkMap.get(cpmk.id_cpmk) ?? 0;
-          cpmkDetails.push({
-            kode:        cpmk.kode_cpmk,
-            deskripsi:   `CPMK dari ${cpmk.nama_mk}`,
-            bobot:       cpmk.bobot_cpmk_persen,
-            nilai:       Math.round(nilaiCpmk * 10) / 10,
-            matakuliah:  `${cpmk.nama_mk} (${cpmk.kode_mk})`,
-            semester:    cpmk.plot_semester,
-            nilaiMK:     nilaiCpmk > 0 ? nilaiToHuruf(nilaiCpmk) : '-',
-          });
+          cpmkList.push({
+            kode: c.kode_cpmk,
+            deskripsi: c.deskripsi_cpmk ?? '',
+            bobot: Number(c.bobot_cpmk_persen),
+            nilai: Number(nilaiCpmk.toFixed(2)),
+            matakuliah: `${c.kode_mk} - ${c.nama_mk}`,
+            semester: String(c.plot_semester ?? '-'),
+            nilaiMK: Number(nilaiMK.toFixed(2)),
+          })
         }
 
-        ikDetails.push({
-          kode:      ik.kode_ik,
+        const targetIk = targetMap.get(ik.id_ik) ?? 0
+        nilaiCpl += nilaiIk * (Number(ik.bobot_ik_persen) / 100)
+        targetCpl += targetIk * (Number(ik.bobot_ik_persen) / 100)
+
+        ikList.push({
+          kode: ik.kode_ik,
           deskripsi: ik.deskripsi,
-          bobot:     ik.bobot_ik_persen,
-          nilai:     nilaiIk,
-          cpmk:      cpmkDetails,
-        });
-
-        nilaiCpl += nilaiIk * (ik.bobot_ik_persen / 100);
+          bobot: Number(ik.bobot_ik_persen),
+          nilai: Number(nilaiIk.toFixed(2)),
+          cpmk: cpmkList,
+        })
       }
 
-      nilaiCpl = Math.round(nilaiCpl * 10) / 10;
+      const status: CplDataItem['status'] = !adaTertempuh
+        ? 'Belum Ditempuh'
+        : nilaiCpl >= targetCpl
+        ? 'Tercapai'
+        : 'Belum Tercapai'
 
-      // Tentukan status
-      let status: string;
-      if (!hasAnyValue || nilaiCpl === 0) {
-        status = 'Belum Ditempuh';
-        nilaiCpl = 0;
-      } else if (nilaiCpl >= TARGET_MIN) {
-        status = 'Tercapai';
-      } else {
-        status = 'Belum Tercapai';
-      }
-
-      // cplData flat item
       cplData.push({
-        name:     cpl.kode_cpl,
-        nilai:    nilaiCpl,
-        target:   TARGET_MIN,
+        name: cpl.kode_cpl,
+        nilai: Number(nilaiCpl.toFixed(2)),
+        target: Number(targetCpl.toFixed(2)),
         status,
-        kategori: KATEGORI_CPL[cpl.kode_cpl] ?? 'Pengetahuan',
-      });
+        kategori: cpl.kategori ?? '-',
+      })
 
-      // detailCpl item (hanya yang punya IK)
-      if (iksForCpl.length > 0) {
-        detailCpl.push({
-          cpl:       cpl.kode_cpl,
-          deskripsi: cpl.deskripsi,
-          nilai:     nilaiCpl,
-          status,
-          ik:        ikDetails,
-        });
-      }
+      detailCpl.push({
+        cpl: cpl.kode_cpl,
+        deskripsi: cpl.deskripsi,
+        nilai: Number(nilaiCpl.toFixed(2)),
+        status,
+        ik: ikList,
+      })
     }
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       data: { cplData, detailCpl },
-    });
-
-  } catch (error) {
-    console.error('[API] GET /mahasiswa/cpl error:', error);
-    return Response.json(
+    })
+  } catch (err) {
+    const authRes = handleAuthError(err)
+    if (authRes) return authRes
+    console.error('[API] /api/mahasiswa/cpl error:', err)
+    return NextResponse.json(
       {
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
-        message: 'Gagal menghitung data CPL.',
-        detail: process.env.NODE_ENV === 'development' ? String(error) : undefined,
+        message: 'Gagal memuat data CPL',
+        ...(process.env.NODE_ENV !== 'production' && err instanceof Error
+          ? { detail: err.message }
+          : {}),
       },
-      { status: 500 }
-    );
+      { status: 500 },
+    )
   }
 }
