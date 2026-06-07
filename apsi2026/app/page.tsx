@@ -1,28 +1,38 @@
 'use client';
 // app/page.tsx
 //
-// PERUBAHAN dari versi sebelumnya:
-//   DIHAPUS: import { usersSeeder } from './data/users'
-//   DIHAPUS: logika validasi usersSeeder.find() yang berjalan di browser
-//   DITAMBAH: isLoading state — mencegah double-submit saat fetch berjalan
-//   DIUBAH: handleLogin → async, memanggil POST /api/auth/login
+// PERUBAHAN dari versi sebelumnya (Batch 4.5.A — Auth Rewire):
+//   DIUBAH: state `username` → `identifier` (semantik lebih tepat: bisa email/NIM/NIP)
+//   DIUBAH: label "Username (NIM / NIP)" → "Email / NIM / NIP"
+//   DIUBAH: placeholder dan helper text
+//   DIUBAH: payload fetch — kirim { identifier, password } (bukan { username, password })
+//   DITAMBAH: contoh akun demo di footer kecil (helpful untuk presentasi)
 //
 // Yang TIDAK berubah:
-//   - Seluruh tampilan UI (form, warna, layout)
-//   - Format session yang disimpan di sessionStorage
+//   - Seluruh tampilan UI (form, warna, layout, animasi)
+//   - Format session yang disimpan di sessionStorage (key: 'currentUser')
 //   - Redirect ke /dashboard/{role} setelah login berhasil
+//   - State isLoading untuk mencegah double-submit
 //
-// Cara login sekarang:
-//   - Mahasiswa          → username = NIM       (contoh: I0320045)
-//   - Dosen/Kaprodi/Admin → username = NIP/NIDN/NIK (contoh: 198203152008122001)
+// Cara login sekarang (5 role):
+//   - Mahasiswa  → NIM (contoh: I0320045) atau email kampus
+//   - Dosen      → NIP/NIDN/NIK atau email kampus
+//   - Kaprodi    → email seed (contoh: kaprodi1@sicpl.test) — password: demo123
+//   - Jamu       → email seed (contoh: jamu1@sicpl.test)    — password: demo123
+//   - Admin      → email seed (contoh: admin1@sicpl.test)   — password: demo123
+//
+// Backend (app/api/auth/login/route.ts) menerima identifier dengan fallback chain:
+//   body.identifier ?? body.email ?? body.username
+// Lalu mencari di kolom user.email OR mahasiswa.nim OR staff.nip_nidn_nik.
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, User, GraduationCap, AlertCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -35,11 +45,11 @@ export default function LoginPage() {
   }, []);
 
   // ─────────────────────────────────────────────
-  // handleLogin — sekarang async dan memanggil API
+  // handleLogin — async, memanggil API POST /api/auth/login
   //
-  // Perubahan utama vs versi usersSeeder:
-  //   SEBELUM: usersSeeder.find((u) => u.username === ... && u.password === ...)
-  //   SEKARANG: fetch POST /api/auth/login → database MySQL
+  // Payload baru: { identifier, password }
+  //   identifier dapat berupa email, NIM, atau NIP/NIDN/NIK.
+  //   Backend yang menentukan sumber pencarian (user.email vs mhs.nim vs staff.nip_nidn_nik).
   // ─────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +62,9 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // PENTING: trim() tapi TIDAK toLowerCase()
-          // NIM mengandung huruf kapital (I0320045) — jangan diubah kasusnya
-          username: username.trim(),
+          // NIM mengandung huruf kapital (I0320045) — jangan diubah kasusnya.
+          // Email akan di-lowercase di sisi backend kalau perlu.
+          identifier: identifier.trim(),
           password: password,
         }),
       });
@@ -62,14 +73,14 @@ export default function LoginPage() {
 
       if (data.success) {
         // Simpan session ke sessionStorage — sama persis dengan format sebelumnya
-        // data.data sudah dalam format UserSession yang benar (dari route.ts)
+        // data.data sudah dalam format SessionUser yang benar (dari route.ts)
         sessionStorage.setItem('currentUser', JSON.stringify(data.data));
 
         // Redirect ke dashboard sesuai role
         router.push(`/dashboard/${data.data.role}`);
       } else {
         // Tampilkan pesan error dari server
-        setError(data.message || 'Username atau password yang Anda masukkan tidak valid.');
+        setError(data.message || 'Email/NIM/NIP atau password yang Anda masukkan tidak valid.');
       }
     } catch {
       // Error jaringan / server tidak bisa diakses
@@ -109,7 +120,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1.5">
-              Username (NIM / NIP)
+              Email / NIM / NIP
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -117,9 +128,9 @@ export default function LoginPage() {
               </span>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Masukkan NIM atau NIP/NIDN/NIK..."
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="Masukkan email, NIM, atau NIP/NIDN/NIK..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-900/40 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
                 required
                 disabled={isLoading}
@@ -162,6 +173,29 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+{/* Link ke Signup */}
+<div className="mt-5 text-center">
+  <Link
+    href="/signup"
+    className="text-xs text-indigo-300 hover:text-indigo-200 font-semibold transition-colors"
+  >
+    Belum punya akun? <span className="text-white underline">Daftar di sini</span>
+  </Link>
+</div>
+
+        {/* Helper text — akun demo */}
+        <div className="mt-5 pt-4 border-t border-white/10">
+          <p className="text-[10px] text-indigo-300/70 font-semibold uppercase tracking-wider mb-1.5">
+            Akun Demo (password: <code className="text-indigo-200">demo123</code>)
+          </p>
+          <ul className="text-[10px] text-slate-400 space-y-0.5 leading-relaxed">
+            <li>• Mahasiswa: <code className="text-indigo-300">I0320045</code> (NIM)</li>
+            <li>• Kaprodi: <code className="text-indigo-300">kaprodi1@sicpl.test</code></li>
+            <li>• Jamu: <code className="text-indigo-300">jamu1@sicpl.test</code></li>
+            <li>• Admin: <code className="text-indigo-300">admin1@sicpl.test</code></li>
+          </ul>
+        </div>
 
       </div>
 

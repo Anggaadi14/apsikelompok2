@@ -28,6 +28,13 @@ let pool: mysql.Pool | null = null;
  *   const db = getDb();
  *   const [rows] = await db.query('SELECT ...', [param]);
  */
+
+export async function getConnection() {
+  // Pastikan pool sudah ter-inisialisasi sebelum ambil koneksi
+  const db = getDb();
+  return await db.getConnection();
+}
+
 export function getDb(): mysql.Pool {
   // Kalau pool belum ada, buat baru
   if (!pool) {
@@ -56,6 +63,14 @@ export function getDb(): mysql.Pool {
   }
 
   return pool;
+}
+
+export async function query<T = any>(
+  sql: string,
+  params: any[] = []
+): Promise<[T, mysql.FieldPacket[]]> {
+  const db = getDb();
+  return db.query(sql, params) as unknown as Promise<[T, mysql.FieldPacket[]]>;
 }
 
 // ─────────────────────────────────────────────

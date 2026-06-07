@@ -1,264 +1,154 @@
-// app/api/auth/login/route.ts
-//
-// ENDPOINT: POST /api/auth/login
-//
-// Menggantikan validasi usersSeeder di client (app/page.tsx).
-// Sekarang login divalidasi ke database MySQL, bukan array hardcoded.
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// ALUR KERJA:
-//
-//   1. Client mengirim POST dengan body { username, password }
-//   2. Endpoint cari user di tabel mahasiswa (cocokkan email_sso ATAU nim)
-//   3. Kalau tidak ketemu di mahasiswa, cari di tabel staff (email_sso ATAU nip_nidn_nik)
-//   4. Kalau ketemu, bandingkan password dengan bcrypt.compare()
-//   5. Kalau cocok, kembalikan session object (format sama persis dengan usersSeeder)
-//   6. Kalau tidak cocok, kembalikan 401
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// KOLOM YANG DIPAKAI:
-//
-//   Tabel mahasiswa:
-//     nim          → identifier (dipakai sebagai "NIM" di ProfileCard)
-//     nama_mahasiswa → name
-//     email_sso    → bisa dipakai sebagai username login
-//     sandi_hash   → password yang sudah di-hash bcrypt
-//     status_akun  → harus 'aktif' agar bisa login
-//
-//   Tabel staff:
-//     nip_nidn_nik → identifier (dipakai sebagai "NIP" di dashboard dosen/kaprodi)
-//     nama_lengkap → name
-//     email_sso    → bisa dipakai sebagai username login
-//     sandi_hash   → password yang sudah di-hash bcrypt
-//     peran        → ENUM('admin', 'dosen', 'kaprodi') → langsung jadi role
-//     status_akun  → harus 'aktif' agar bisa login
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// FORMAT SESSION YANG DIKEMBALIKAN (harus sama persis dengan users.ts):
-//
-//   {
-//     id:         string   // "mhs_<id_mahasiswa>" atau "staff_<id_staff>"
-//     username:   string   // email_sso yang dipakai login
-//     name:       string   // nama lengkap
-//     role:       string   // 'mahasiswa' | 'dosen' | 'kaprodi' | 'admin'
-//     identifier: string   // NIM untuk mahasiswa, nip_nidn_nik untuk staff
-//     initials:   string   // 2 huruf dari nama depan + belakang
-//     prodi:      string   // hardcoded per konteks prodi
-//   }
-//
-// ─────────────────────────────────────────────────────────────────────────────
+import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { getDb } from '@/app/lib/db'
 
-import { NextRequest } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { getDb } from '@/app/lib/db';
-import { serverError } from '@/app/lib/auth';
-import type mysql from 'mysql2/promise';
-
-// ─────────────────────────────────────────────
-// Tipe hasil query dari database
-// ─────────────────────────────────────────────
-
-interface MahasiswaLoginRow {
-  id_mahasiswa: number;
-  nim: string;
-  nama_mahasiswa: string;
-  email_sso: string;
-  sandi_hash: string;
-  status_akun: string;
-}
-
-interface StaffLoginRow {
-  id_staff: number;
-  nip_nidn_nik: string;
-  nama_lengkap: string;
-  email_sso: string;
-  sandi_hash: string;
-  peran: 'admin' | 'dosen' | 'kaprodi';
-  status_akun: string;
-}
-
-// ─────────────────────────────────────────────
-// Helper: Buat inisial dari nama lengkap
-//
-// Contoh:
-//   "Ahmad Fadli"           → "AF"
-//   "Siti Nurhaliza Indah"  → "SI"
-//   "Budi"                  → "BU"
-// ─────────────────────────────────────────────
-function buatInisial(nama: string): string {
-  const bagian = nama.trim().split(/\s+/);
-  if (bagian.length === 1) {
-    // Nama satu kata: ambil 2 huruf pertama
-    return bagian[0].substring(0, 2).toUpperCase();
-  }
-  // Nama lebih dari satu kata: huruf pertama kata pertama + huruf pertama kata terakhir
-  return (bagian[0][0] + bagian[bagian.length - 1][0]).toUpperCase();
-}
-
-// ─────────────────────────────────────────────
-// HANDLER UTAMA — POST /api/auth/login
-// ─────────────────────────────────────────────
-export async function POST(request: NextRequest) {
-  // ── LANGKAH 1: Parse body request ────────────────────────────────────
-  let username: string;
-  let password: string;
-
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    username = (body.username ?? '').trim().toLowerCase();
-    password = body.password ?? '';
-  } catch {
-    return Response.json(
-      {
-        success: false,
-        error: 'BAD_REQUEST',
-        message: 'Format request tidak valid.',
-      },
-      { status: 400 }
-    );
-  }
+    const body = await req.json().catch(() => ({}))
 
-  // Validasi: username dan password tidak boleh kosong
-  if (!username || !password) {
-    return Response.json(
-      {
-        success: false,
-        error: 'BAD_REQUEST',
-        message: 'Username dan password harus diisi.',
-      },
-      { status: 400 }
-    );
-  }
+    // Terima identifier dari beberapa nama field untuk kompatibilitas:
+    //   - identifier (baru, direkomendasikan)
+    //   - email      (untuk akun seed kaprodi/jamu/admin yang signin pakai email)
+    //   - username   (untuk frontend lama yang belum di-update)
+    const identifierRaw =
+      body?.identifier ?? body?.email ?? body?.username ?? ''
+    const password = body?.password ?? ''
 
-  try {
-    const db = getDb();
+    const identifier = String(identifierRaw).trim()
 
-    // ── LANGKAH 2: Cari di tabel mahasiswa ────────────────────────────
-    //
-    // Strategi: cocokkan input ke email_sso ATAU nim
-    // Ini memungkinkan mahasiswa login dengan email SSO atau NIM mereka
-    //
-    // Catatan WHERE:
-    //   LOWER(email_sso) = ?  → case-insensitive email match
-    //   nim = ?               → NIM biasanya case-sensitive (huruf kapital)
-    //
-    const [mhsRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT id_mahasiswa, nim, nama_mahasiswa, email_sso, sandi_hash, status_akun
-       FROM mahasiswa
-       WHERE LOWER(email_sso) = ? OR nim = ?
-       LIMIT 1`,
-      [username, username.toUpperCase()] // NIM biasanya kapital, email lowercase
-    );
-
-    // Kalau ketemu di tabel mahasiswa
-    if (mhsRows.length > 0) {
-      const mhs = mhsRows[0] as MahasiswaLoginRow;
-
-      // Cek status akun dulu sebelum compare password (lebih efisien)
-      if (mhs.status_akun !== 'aktif') {
-        return Response.json(
-          {
-            success: false,
-            error: 'ACCOUNT_INACTIVE',
-            message: 'Akun Anda tidak aktif. Hubungi administrator.',
-          },
-          { status: 403 }
-        );
-      }
-
-      // Bandingkan password input dengan hash di database
-      const passwordCocok = await bcrypt.compare(password, mhs.sandi_hash);
-
-      if (!passwordCocok) {
-        // Password salah — kembalikan pesan generik (jangan bilang "password salah" vs "user tidak ada")
-        return invalidCredentials();
-      }
-
-      // ✅ Login berhasil — susun session object
-      const sessionData = {
-        id:         `mhs_${mhs.id_mahasiswa}`,
-        username:   mhs.email_sso,
-        name:       mhs.nama_mahasiswa,
-        role:       'mahasiswa' as const,
-        identifier: mhs.nim,          // NIM dipakai oleh endpoint profile/cpl/semester
-        initials:   buatInisial(mhs.nama_mahasiswa),
-        prodi:      'Prodi Teknik Industri UNS', // TODO: tambah relasi ke tabel prodi kalau schema diperluas
-      };
-
-      return Response.json({ success: true, data: sessionData });
-    }
-
-    // ── LANGKAH 3: Tidak ketemu di mahasiswa → cari di tabel staff ────
-    //
-    // Staff bisa login dengan email_sso ATAU nip_nidn_nik
-    //
-    const [staffRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT id_staff, nip_nidn_nik, nama_lengkap, email_sso, sandi_hash, peran, status_akun
-       FROM staff
-       WHERE LOWER(email_sso) = ? OR nip_nidn_nik = ?
-       LIMIT 1`,
-      [username, username] // NIP tidak perlu diubah case-nya
-    );
-
-    // Kalau tidak ketemu di staff juga → user tidak ada
-    if (staffRows.length === 0) {
-      return invalidCredentials();
-    }
-
-    const staff = staffRows[0] as StaffLoginRow;
-
-    // Cek status akun
-    if (staff.status_akun !== 'aktif') {
-      return Response.json(
+    if (!identifier || !password) {
+      return NextResponse.json(
         {
           success: false,
-          error: 'ACCOUNT_INACTIVE',
-          message: 'Akun Anda tidak aktif. Hubungi administrator.',
+          error: 'INVALID_INPUT',
+          message: 'Email / NIM / NIP dan password wajib diisi',
         },
-        { status: 403 }
-      );
+        { status: 400 },
+      )
     }
 
-    // Bandingkan password
-    const passwordCocok = await bcrypt.compare(password, staff.sandi_hash);
+    const db = getDb()
 
-    if (!passwordCocok) {
-      return invalidCredentials();
+    // Cari user berdasarkan SALAH SATU dari:
+    //   1) user.email (akun seeded + signup baru)
+    //   2) mahasiswa.nim (login mahasiswa pakai NIM)
+    //   3) staff.nip_nidn_nik (login staff pakai NIP/NIDN/NIK)
+    const [rows] = await db.query<any[]>(
+      `SELECT
+         u.id_user, u.email, u.sandi_hash, u.role, u.status,
+         u.id_mahasiswa, u.id_staff, u.nama_input,
+         m.nim, m.nama_mahasiswa, m.angkatan,
+         s.nip_nidn_nik, s.nama_lengkap, s.peran AS staff_peran
+       FROM user u
+       LEFT JOIN mahasiswa m ON u.id_mahasiswa = m.id_mahasiswa
+       LEFT JOIN staff s     ON u.id_staff     = s.id_staff
+       WHERE u.email = ?
+          OR m.nim = ?
+          OR s.nip_nidn_nik = ?
+       LIMIT 1`,
+      [identifier, identifier, identifier],
+    )
+
+    const user = (rows as any[])[0]
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'INVALID_CREDENTIALS',
+          message: 'Email/NIM/NIP atau password salah',
+        },
+        { status: 401 },
+      )
     }
 
-    // ✅ Login berhasil — susun session object untuk staff
-    const sessionData = {
-      id:         `staff_${staff.id_staff}`,
-      username:   staff.email_sso,
-      name:       staff.nama_lengkap,
-      role:       staff.peran,          // 'admin' | 'dosen' | 'kaprodi' — langsung dari DB
-      identifier: staff.nip_nidn_nik,   // NIP dipakai di dashboard dosen/kaprodi
-      initials:   buatInisial(staff.nama_lengkap),
-      prodi:      'Prodi Teknik Industri UNS',
-    };
+    if (user.status === 'pending_verification') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'PENDING_VERIFICATION',
+          message: 'Akun belum diverifikasi. Silakan cek email untuk link verifikasi.',
+        },
+        { status: 403 },
+      )
+    }
 
-    return Response.json({ success: true, data: sessionData });
+    if (user.status !== 'aktif') {
+      return NextResponse.json(
+        { success: false, error: 'ACCOUNT_INACTIVE', message: 'Akun nonaktif. Hubungi admin.' },
+        { status: 403 },
+      )
+    }
 
-  } catch (error) {
-    console.error('[API] POST /auth/login error:', error);
-    return serverError(error instanceof Error ? error.message : String(error));
+    if (!user.sandi_hash) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'NO_PASSWORD',
+          message: 'Akun belum memiliki sandi. Selesaikan verifikasi terlebih dahulu.',
+        },
+        { status: 403 },
+      )
+    }
+
+    const ok = await bcrypt.compare(password, user.sandi_hash)
+    if (!ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'INVALID_CREDENTIALS',
+          message: 'Email/NIM/NIP atau password salah',
+        },
+        { status: 401 },
+      )
+    }
+
+    // Bangun session — kompatibel dengan format lama (id "mhs_X" / "staff_X")
+    const isMahasiswa = user.role === 'mahasiswa' && !!user.id_mahasiswa
+    const legacyId = isMahasiswa
+      ? `mhs_${user.id_mahasiswa}`
+      : user.id_staff
+        ? `staff_${user.id_staff}`
+        : ''
+
+    const name = isMahasiswa
+      ? user.nama_mahasiswa
+      : user.nama_lengkap || user.nama_input || user.email
+
+    const identifierOut = isMahasiswa
+      ? user.nim || ''
+      : user.nip_nidn_nik || ''
+
+    const initials = String(name || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w: string) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
+
+    const session = {
+      // baru
+      id_user: user.id_user,
+      email: user.email,
+      role: user.role,
+      id_mahasiswa: user.id_mahasiswa,
+      id_staff: user.id_staff,
+      // legacy
+      id: legacyId,
+      username: String(user.email).split('@')[0],
+      name,
+      identifier: identifierOut,
+      initials,
+      prodi: 'Prodi Teknik Industri UNS',
+    }
+
+    return NextResponse.json({ success: true, data: session })
+  } catch (err: any) {
+    console.error('[POST /api/auth/login]', err)
+    return NextResponse.json(
+      { success: false, error: 'SERVER_ERROR', message: err?.message || 'Internal server error' },
+      { status: 500 },
+    )
   }
-}
-
-// ─────────────────────────────────────────────
-// Helper: Response 401 generik
-//
-// Selalu pakai pesan yang sama untuk user-tidak-ada
-// maupun password-salah. Ini mencegah "user enumeration attack"
-// (penyerang tidak bisa tahu apakah username ada atau tidak)
-// ─────────────────────────────────────────────
-function invalidCredentials() {
-  return Response.json(
-    {
-      success: false,
-      error: 'INVALID_CREDENTIALS',
-      message: 'Username atau Password yang Anda masukkan tidak valid.',
-    },
-    { status: 401 }
-  );
 }
