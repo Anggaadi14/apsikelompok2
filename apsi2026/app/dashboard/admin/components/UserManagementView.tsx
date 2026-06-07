@@ -42,6 +42,15 @@ export default function UserManagementView({ sessionUser }: UserManagementViewPr
       joinDate: '2020-01-10',
     },
     {
+      id: 'user_jamu',
+      nama: 'Tim Jamu Satu, S.T., M.T.',
+      username: 'jamu1',
+      email: 'jamu1@sicpl.test',
+      role: 'jamu',
+      status: 'Aktif',
+      joinDate: '2020-03-01',
+    },
+    {
       id: 'user_dsn',
       nama: 'Dr. Siti Aminah, S.T., M.T.',
       username: 'dosen',
@@ -77,12 +86,15 @@ export default function UserManagementView({ sessionUser }: UserManagementViewPr
         return 'bg-green-100 text-green-700';
       case 'kaprodi':
         return 'bg-purple-100 text-purple-700';
+      case 'jamu':
+        return 'bg-amber-100 text-amber-700';
       case 'admin':
         return 'bg-red-100 text-red-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -118,9 +130,11 @@ export default function UserManagementView({ sessionUser }: UserManagementViewPr
           <option value="all">Semua Role</option>
           <option value="admin">Admin</option>
           <option value="kaprodi">Kaprodi</option>
+          <option value="jamu">Jamu</option>
           <option value="dosen">Dosen</option>
           <option value="mahasiswa">Mahasiswa</option>
         </select>
+
       </div>
 
       {/* Users Table */}
@@ -181,7 +195,7 @@ export default function UserManagementView({ sessionUser }: UserManagementViewPr
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-600">Total User</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{users.length}</p>
@@ -199,9 +213,21 @@ export default function UserManagementView({ sessionUser }: UserManagementViewPr
           </p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-sm text-gray-600">Jamu</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">
+            {users.filter((u) => u.role === 'jamu').length}
+          </p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-600">Dosen</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">
             {users.filter((u) => u.role === 'dosen').length}
+          </p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-sm text-gray-600">Mahasiswa</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">
+            {users.filter((u) => u.role === 'mahasiswa').length}
           </p>
         </div>
       </div>

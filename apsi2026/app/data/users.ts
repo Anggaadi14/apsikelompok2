@@ -1,4 +1,4 @@
-export type UserRole = 'mahasiswa' | 'kaprodi' | 'dosen' | 'admin';
+export type UserRole = 'mahasiswa' | 'kaprodi' | 'dosen' | 'admin' | 'jamu';
 
 export interface UserSession {
   id: string;
@@ -127,4 +127,27 @@ export const usersSeeder: (UserSession & { password: string })[] = [
     initials: 'SA',
     prodi: 'Pusat Data Akademik UNS',
   },
+
+  // ============ JAMU USERS ============
+  {
+    id: 'user_jamu_001',
+    username: 'jamu1',
+    password: 'password123',
+    name: 'Tim Jamu Satu, S.T., M.T.',
+    role: 'jamu',
+    identifier: 'JM001',
+    initials: 'TJ',
+    prodi: 'Prodi Teknik Industri UNS',
+  },
+  {
+    id: 'user_jamu_002',
+    username: 'jamu2',
+    password: 'password123',
+    name: 'Tim Jamu Dua, S.T., M.T.',
+    role: 'jamu',
+    identifier: 'JM002',
+    initials: 'TJ',
+    prodi: 'Prodi Teknik Industri UNS',
+  },
 ];
+
