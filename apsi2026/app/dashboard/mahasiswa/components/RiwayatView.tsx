@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { RiwayatNilaiItem } from '../data';
+import { nilaiKeHuruf } from '@/app/lib/grading';
 
 interface RiwayatViewProps {
   riwayatNilaiData: RiwayatNilaiItem[];
@@ -18,7 +19,6 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
   const getFilteredData = () => {
     let data = [...riwayatNilaiData];
 
-    // Search filter
     if (searchMK.trim() !== '') {
       const query = searchMK.toLowerCase();
       data = data.filter(
@@ -27,16 +27,14 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
       );
     }
 
-    // Semester filter
     if (filterSemester !== 'all') {
       data = data.filter((item) => item.semester.toString() === filterSemester);
     }
 
-    // Sorting
     data.sort((a, b) => {
-      if (sortBy === 'no-asc') return a.no - b.no;
-      if (sortBy === 'no-desc') return b.no - a.no;
-      if (sortBy === 'sks-desc') return b.sks - a.sks;
+      if (sortBy === 'no-asc')     return a.no - b.no;
+      if (sortBy === 'no-desc')    return b.no - a.no;
+      if (sortBy === 'sks-desc')   return b.sks - a.sks;
       if (sortBy === 'nilai-desc') return b.nilaiAkhir - a.nilaiAkhir;
       return 0;
     });
@@ -46,24 +44,15 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
 
   const filteredData = getFilteredData();
 
-  // Summary Metrics
+  // Summary Metrics — pakai nilaiKeHuruf() dari lib/grading.ts (single source of truth)
   const totalSKS = filteredData.reduce((acc, curr) => acc + curr.sks, 0);
   const totalPoints = filteredData.reduce((acc, curr) => {
-    let indexValue = 0;
-    if (curr.huruf === 'A') indexValue = 4.0;
-    else if (curr.huruf === 'A-') indexValue = 3.7;
-    else if (curr.huruf === 'B+') indexValue = 3.3;
-    else if (curr.huruf === 'B') indexValue = 3.0;
-    else if (curr.huruf === 'B-') indexValue = 2.7;
-    else if (curr.huruf === 'C+') indexValue = 2.3;
-    else if (curr.huruf === 'C') indexValue = 2.0;
-    else if (curr.huruf === 'D') indexValue = 1.0;
-    
-    return acc + indexValue * curr.sks;
+    const { bobot } = nilaiKeHuruf(curr.nilaiAkhir);
+    return acc + bobot * curr.sks;
   }, 0);
   const calculatedGPA = totalSKS > 0 ? (totalPoints / totalSKS).toFixed(2) : '0.00';
 
-  // Export CSV Simulation
+  // Export CSV
   const handleExportCSV = () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -102,27 +91,23 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
     }, 1000);
   };
 
-  // Grade badge styling based on value
+  // Grade badge styling
   const getGradeBadgeStyle = (letter: string) => {
     switch (letter) {
-      case 'A':
-        return 'bg-green-100 text-green-800 border border-green-200';
-      case 'A-':
-        return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
-      case 'B+':
-        return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
-      case 'B':
-        return 'bg-blue-50 text-blue-700 border border-blue-100';
-      case 'B-':
-        return 'bg-amber-50 text-amber-700 border border-amber-100';
-      case 'C+':
-        return 'bg-amber-100 text-amber-800 border border-amber-200';
-      case 'C':
-        return 'bg-orange-50 text-orange-700 border border-orange-100';
-      default:
-        return 'bg-rose-50 text-rose-700 border border-rose-100';
+      case 'A':  return 'bg-green-100 text-green-800 border border-green-200';
+      case 'A-': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+      case 'B+': return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
+      case 'B':  return 'bg-blue-50 text-blue-700 border border-blue-100';
+      case 'B-': return 'bg-amber-50 text-amber-700 border border-amber-100';
+      case 'C+': return 'bg-amber-100 text-amber-800 border border-amber-200';
+      case 'C':  return 'bg-orange-50 text-orange-700 border border-orange-100';
+      default:   return 'bg-rose-50 text-rose-700 border border-rose-100';
     }
   };
+
+  // Daftar semester unik dari data (otomatis, tidak hardcode 1–5)
+  const semesterOptions = Array.from(new Set(riwayatNilaiData.map((r) => r.semester)))
+    .sort((a, b) => a - b);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -160,11 +145,9 @@ export default function RiwayatView({ riwayatNilaiData }: RiwayatViewProps) {
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-slate-700 bg-white"
           >
             <option value="all">Semua Semester</option>
-            <option value="1">Semester 1</option>
-            <option value="2">Semester 2</option>
-            <option value="3">Semester 3</option>
-            <option value="4">Semester 4</option>
-            <option value="5">Semester 5</option>
+            {semesterOptions.map((s) => (
+              <option key={s} value={s.toString()}>Semester {s}</option>
+            ))}
           </select>
         </div>
         <div>
