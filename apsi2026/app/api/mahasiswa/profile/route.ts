@@ -111,12 +111,12 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       data: {
-        nim:             mahasiswa.nim,
-        nama_mahasiswa:  mahasiswa.nama_mahasiswa,
-        angkatan:        mahasiswa.angkatan,
-        semester_aktif:  semesterAktif,
-        ipk:             ipk,
-        prodi:           session.prodi,
+        nim: mahasiswa.nim,
+        nama_mahasiswa: mahasiswa.nama_mahasiswa,
+        angkatan: mahasiswa.angkatan,
+        semester_aktif: semesterAktif,
+        ipk: ipk,
+        prodi: session.prodi,
       },
     });
   } catch (error) {

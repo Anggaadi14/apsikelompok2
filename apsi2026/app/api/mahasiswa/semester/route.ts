@@ -13,7 +13,7 @@
 //   ["Ganjil 2024/2025", "Genap 2023/2024", "Ganjil 2023/2024"]
 
 import { NextRequest } from 'next/server';
-import { getSessionFromRequest, unauthorized, forbidden, serverError } from '@/app/lib/auth';
+import { getSessionUser, unauthorized, forbidden, serverError } from '@/app/lib/auth';
 import { getDb } from '@/app/lib/db';
 import { formatSemester } from '@/app/lib/grading';
 import type mysql from 'mysql2/promise';
@@ -25,7 +25,7 @@ interface SemesterRow {
 
 export async function GET(request: NextRequest) {
   // ── Validasi session ──────────────────────────────────────────────────
-  const session = getSessionFromRequest(request);
+  const session = await getSessionUser(request);
   if (!session) return unauthorized();
   if (session.role !== 'mahasiswa') return forbidden();
 

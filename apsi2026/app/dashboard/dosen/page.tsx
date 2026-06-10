@@ -59,8 +59,9 @@ export default function DosenDashboard() {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
       <Navbar
         portalTitle="SICPL - Portal Dosen"
+        prodiLabel="Prodi Teknik Industri UNS"
         userName={sessionUser.name}
-        userRole="Dosen"
+        userNimNip={sessionUser.identifier}
         userInitials={sessionUser.initials}
         onLogout={handleLogout}
       />
@@ -68,8 +69,8 @@ export default function DosenDashboard() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           items={sidebarItems}
-          activeId={activeTab}
-          onSelect={(id) => setActiveTab(id as typeof activeTab)}
+          activeTab={activeTab}
+          setActiveTab={(id: string) => setActiveTab(id as typeof activeTab)}
         />
 
         <main className="flex-1 overflow-auto">

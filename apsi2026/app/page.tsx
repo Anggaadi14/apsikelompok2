@@ -29,6 +29,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, User, GraduationCap, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -85,6 +86,29 @@ export default function LoginPage() {
     } catch {
       // Error jaringan / server tidak bisa diakses
       setError('Tidak dapat terhubung ke server. Pastikan server sedang berjalan (npm run dev).');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        sessionStorage.setItem('currentUser', JSON.stringify(data.data));
+        router.push(`/dashboard/${data.data.role}`);
+      } else {
+        setError(data.message || 'Login dengan Google gagal.');
+      }
+    } catch {
+      setError('Tidak dapat terhubung ke server.');
     } finally {
       setIsLoading(false);
     }
@@ -173,6 +197,18 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="relative mt-6 mb-4 flex items-center justify-center">
+          <div className="absolute border-t border-white/20 w-full"></div>
+          <span className="bg-[#1f2937] px-3 text-[10px] uppercase tracking-wider font-bold text-indigo-300 relative z-10 rounded">ATAU</span>
+        </div>
+        
+        <div className="flex justify-center">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError('Login dengan Google dibatalkan atau gagal.')}
+          />
+        </div>
 
 {/* Link ke Signup */}
 <div className="mt-5 text-center">

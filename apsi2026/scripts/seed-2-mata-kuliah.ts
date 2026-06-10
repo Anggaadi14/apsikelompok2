@@ -54,7 +54,8 @@ async function main() {
       }
 
       const sks = typeof sksRaw === 'string' ? parseFloat(sksRaw) : Number(sksRaw)
-      const semester = semesterRaw === null || semesterRaw === '' ? null : Number(semesterRaw)
+      const semesterNum = Number(semesterRaw)
+      const semester = semesterRaw === null || semesterRaw === '' || isNaN(semesterNum) ? null : semesterNum
       const singkatan = deriveSingkatanMK(namaMk)
 
       // Insert MK (unik per kode_mk)

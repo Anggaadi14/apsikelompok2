@@ -5,13 +5,19 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { Users, Settings, Database, Shield } from 'lucide-react';
+import { 
+  Users, Database, LayoutDashboard, Target, 
+  CheckSquare, ListChecks, BookOpen, MonitorPlay, 
+  GitMerge, Scale, UploadCloud 
+} from 'lucide-react';
 import AdminDashboardView from './components/AdminDashboardView';
 import UserManagementView from './components/UserManagementView';
+import UploadDataMasterView from './components/UploadDataMasterView';
+import GenericManageView from './components/GenericManageView';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [sessionUser, setSessionUser] = useState<UserSession | null>(null);
 
   // Auth Guard check
@@ -35,8 +41,16 @@ export default function AdminDashboard() {
   }, [router]);
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <Database className="w-5 h-5" /> },
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'users', label: 'Manajemen User', icon: <Users className="w-5 h-5" /> },
+    { id: 'upload', label: 'Upload Data Master', icon: <UploadCloud className="w-5 h-5" /> },
+    { id: 'cpl', label: 'Kelola CPL', icon: <Target className="w-5 h-5" /> },
+    { id: 'ik', label: 'Kelola IK', icon: <CheckSquare className="w-5 h-5" /> },
+    { id: 'cpmk', label: 'Kelola CPMK', icon: <ListChecks className="w-5 h-5" /> },
+    { id: 'matkul', label: 'Kelola Mata Kuliah', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'kelas', label: 'Kelola Kelas Tayang', icon: <MonitorPlay className="w-5 h-5" /> },
+    { id: 'mapping', label: 'Mapping CPMK-IK', icon: <GitMerge className="w-5 h-5" /> },
+    { id: 'bobot', label: 'Kelola Bobot', icon: <Scale className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {
@@ -54,6 +68,33 @@ export default function AdminDashboard() {
       </div>
     );
   }
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <AdminDashboardView sessionUser={sessionUser} />;
+      case 'users':
+        return <UserManagementView sessionUser={sessionUser} />;
+      case 'upload':
+        return <UploadDataMasterView sessionUser={sessionUser} />;
+      case 'cpl':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola CPL" description="Manajemen Capaian Pembelajaran Lulusan (CPL)" />;
+      case 'ik':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola IK" description="Manajemen Indikator Kinerja (IK)" />;
+      case 'cpmk':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola CPMK" description="Manajemen Capaian Pembelajaran Mata Kuliah (CPMK)" />;
+      case 'matkul':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola Mata Kuliah" description="Manajemen Data Mata Kuliah dan Kurikulum" />;
+      case 'kelas':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola Kelas Tayang" description="Manajemen Pembukaan Kelas per Semester" />;
+      case 'mapping':
+        return <GenericManageView sessionUser={sessionUser} title="Mapping CPMK-IK-CPL" description="Pemetaan hubungan antara CPMK, IK, dan CPL" />;
+      case 'bobot':
+        return <GenericManageView sessionUser={sessionUser} title="Kelola Bobot" description="Manajemen Bobot Evaluasi dan Penilaian" />;
+      default:
+        return <AdminDashboardView sessionUser={sessionUser} />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
@@ -75,8 +116,7 @@ export default function AdminDashboard() {
 
         <main className="flex-1 overflow-auto">
           <div className="p-8">
-            {activeTab === 'dashboard' && <AdminDashboardView sessionUser={sessionUser} />}
-            {activeTab === 'users' && <UserManagementView sessionUser={sessionUser} />}
+            {renderContent()}
           </div>
         </main>
       </div>

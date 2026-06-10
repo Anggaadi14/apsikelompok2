@@ -68,8 +68,8 @@ export async function GET(req: NextRequest) {
         r.nilai_remedi != null
           ? Number(r.nilai_remedi)
           : r.nilai_asli != null
-          ? Number(r.nilai_asli)
-          : null
+            ? Number(r.nilai_asli)
+            : null
       b.komponen.push({
         nama: r.nama_komponen,
         bobot: Number(r.bobot_non_cpmk),

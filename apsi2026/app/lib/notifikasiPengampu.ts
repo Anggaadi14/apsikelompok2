@@ -159,9 +159,8 @@ export async function notifyKoPengampuOnEdit(opts: {
 
     if (!kelas || !editor || koPengampu.length === 0) return;
 
-    const kelasLabel = `${kelas.kode_mk} ${kelas.nama_mk}${
-      kelas.kode_kelas ? ` (Kelas ${kelas.kode_kelas})` : ''
-    }`;
+    const kelasLabel = `${kelas.kode_mk} ${kelas.nama_mk}${kelas.kode_kelas ? ` (Kelas ${kelas.kode_kelas})` : ''
+      }`;
 
     const subject = `[SICPL] Nilai diubah — ${kelas.kode_mk} ${kelas.kode_kelas ?? ''}`.trim();
     const html = buildEmailHtml({
@@ -217,9 +216,8 @@ export async function notifyKoPengampuOnUpload(opts: {
 
     if (!kelas || !editor || koPengampu.length === 0) return;
 
-    const kelasLabel = `${kelas.kode_mk} ${kelas.nama_mk}${
-      kelas.kode_kelas ? ` (Kelas ${kelas.kode_kelas})` : ''
-    }`;
+    const kelasLabel = `${kelas.kode_mk} ${kelas.nama_mk}${kelas.kode_kelas ? ` (Kelas ${kelas.kode_kelas})` : ''
+      }`;
 
     const subject = `[SICPL] Upload SIAKAD — ${kelas.kode_mk} ${kelas.kode_kelas ?? ''}`.trim();
     const html = buildEmailHtml({
@@ -235,11 +233,10 @@ export async function notifyKoPengampuOnUpload(opts: {
           <li>File: <code>${opts.fileName}</code></li>
           <li>Berhasil: <strong>${opts.jumlahBerhasil}</strong> nilai tersimpan</li>
           <li>Gagal: ${opts.jumlahGagal} baris</li>
-          ${
-            opts.masalahDilaporkan > 0
-              ? `<li>Dilaporkan ke modul data bermasalah: ${opts.masalahDilaporkan} item</li>`
-              : ''
-          }
+          ${opts.masalahDilaporkan > 0
+          ? `<li>Dilaporkan ke modul data bermasalah: ${opts.masalahDilaporkan} item</li>`
+          : ''
+        }
         </ul>
         <p style="margin:8px 0 0 0;color:#6b7280;font-size:13px;">
           Login ke SICPL untuk melihat hasil dan melakukan koreksi jika perlu.

@@ -137,8 +137,8 @@ export async function GET(req: NextRequest) {
         n.nilai_remedi != null
           ? Number(n.nilai_remedi)
           : n.nilai_asli != null
-          ? Number(n.nilai_asli)
-          : null
+            ? Number(n.nilai_asli)
+            : null
       if (efektif == null) continue
       tertempuhCpmk.add(n.id_cpmk)
       const kontrib = efektif * (Number(n.bobot_media_asesmen) / 100)
@@ -207,8 +207,8 @@ export async function GET(req: NextRequest) {
       const status: CplDataItem['status'] = !adaTertempuh
         ? 'Belum Ditempuh'
         : nilaiCpl >= targetCpl
-        ? 'Tercapai'
-        : 'Belum Tercapai'
+          ? 'Tercapai'
+          : 'Belum Tercapai'
 
       cplData.push({
         name: cpl.kode_cpl,

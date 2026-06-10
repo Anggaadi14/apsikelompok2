@@ -43,7 +43,7 @@ async function main() {
     }
 
     log.info('Read Data_Pengampu.xlsx...')
-    const pengampuFile = path.join(DATA_DIR, 'Data_Pengampu.xlsx')
+    const pengampuFile = path.join(DATA_DIR, 'Data Pengampu.xlsx')
     const rows = readSheetAsObjects(pengampuFile)
 
     let kelasInserted = 0
