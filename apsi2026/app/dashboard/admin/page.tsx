@@ -14,6 +14,7 @@ import AdminDashboardView from './components/AdminDashboardView';
 import UserManagementView from './components/UserManagementView';
 import UploadDataMasterView from './components/UploadDataMasterView';
 import GenericManageView from './components/GenericManageView';
+import CplManagementView from './components/CplManagementView';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -78,7 +79,7 @@ export default function AdminDashboard() {
       case 'upload':
         return <UploadDataMasterView sessionUser={sessionUser} />;
       case 'cpl':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola CPL" description="Manajemen Capaian Pembelajaran Lulusan (CPL)" />;
+        return <CplManagementView sessionUser={sessionUser} />;
       case 'ik':
         return <GenericManageView sessionUser={sessionUser} title="Kelola IK" description="Manajemen Indikator Kinerja (IK)" />;
       case 'cpmk':
