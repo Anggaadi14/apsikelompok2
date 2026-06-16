@@ -1,33 +1,20 @@
 'use client';
 // app/page.tsx
 //
-// PERUBAHAN dari versi sebelumnya (Batch 4.5.A — Auth Rewire):
-//   DIUBAH: state `username` → `identifier` (semantik lebih tepat: bisa email/NIM/NIP)
-//   DIUBAH: label "Username (NIM / NIP)" → "Email / NIM / NIP"
-//   DIUBAH: placeholder dan helper text
-//   DIUBAH: payload fetch — kirim { identifier, password } (bukan { username, password })
-//   DITAMBAH: contoh akun demo di footer kecil (helpful untuk presentasi)
+// PERUBAHAN dari versi sebelumnya:
+//   DITAMBAH: toggle show/hide password (revisi tester TC-S-009..013, O-01)
+//   DITAMBAH: ikon Eye / EyeOff dari lucide-react
+//   DITAMBAH: state showPassword + tombol toggle di kanan input password
 //
 // Yang TIDAK berubah:
-//   - Seluruh tampilan UI (form, warna, layout, animasi)
+//   - Seluruh tampilan UI selain tombol toggle
 //   - Format session yang disimpan di sessionStorage (key: 'currentUser')
 //   - Redirect ke /dashboard/{role} setelah login berhasil
-//   - State isLoading untuk mencegah double-submit
-//
-// Cara login sekarang (5 role):
-//   - Mahasiswa  → NIM (contoh: I0320045) atau email kampus
-//   - Dosen      → NIP/NIDN/NIK atau email kampus
-//   - Kaprodi    → email seed (contoh: kaprodi1@sicpl.test) — password: demo123
-//   - Jamu       → email seed (contoh: jamu1@sicpl.test)    — password: demo123
-//   - Admin      → email seed (contoh: admin1@sicpl.test)   — password: demo123
-//
-// Backend (app/api/auth/login/route.ts) menerima identifier dengan fallback chain:
-//   body.identifier ?? body.email ?? body.username
-// Lalu mencari di kolom user.email OR mahasiswa.nim OR staff.nip_nidn_nik.
+//   - Google OAuth login flow
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, User, GraduationCap, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User, GraduationCap, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { GoogleLogin } from '@react-oauth/google';
 
@@ -40,6 +27,9 @@ export default function LoginPage() {
   // State loading — mencegah submit ganda saat request sedang berjalan
   const [isLoading, setIsLoading] = useState(false);
 
+  // State toggle show/hide password
+  const [showPassword, setShowPassword] = useState(false);
+
   // Clear existing session on mount
   useEffect(() => {
     sessionStorage.removeItem('currentUser');
@@ -47,10 +37,8 @@ export default function LoginPage() {
 
   // ─────────────────────────────────────────────
   // handleLogin — async, memanggil API POST /api/auth/login
-  //
-  // Payload baru: { identifier, password }
+  // Payload: { identifier, password }
   //   identifier dapat berupa email, NIM, atau NIP/NIDN/NIK.
-  //   Backend yang menentukan sumber pencarian (user.email vs mhs.nim vs staff.nip_nidn_nik).
   // ─────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +52,6 @@ export default function LoginPage() {
         body: JSON.stringify({
           // PENTING: trim() tapi TIDAK toLowerCase()
           // NIM mengandung huruf kapital (I0320045) — jangan diubah kasusnya.
-          // Email akan di-lowercase di sisi backend kalau perlu.
           identifier: identifier.trim(),
           password: password,
         }),
@@ -73,18 +60,12 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
-        // Simpan session ke sessionStorage — sama persis dengan format sebelumnya
-        // data.data sudah dalam format SessionUser yang benar (dari route.ts)
         sessionStorage.setItem('currentUser', JSON.stringify(data.data));
-
-        // Redirect ke dashboard sesuai role
         router.push(`/dashboard/${data.data.role}`);
       } else {
-        // Tampilkan pesan error dari server
         setError(data.message || 'Email/NIM/NIP atau password yang Anda masukkan tidak valid.');
       }
     } catch {
-      // Error jaringan / server tidak bisa diakses
       setError('Tidak dapat terhubung ke server. Pastikan server sedang berjalan (npm run dev).');
     } finally {
       setIsLoading(false);
@@ -170,15 +151,24 @@ export default function LoginPage() {
                 <Lock className="w-4 h-4 text-indigo-400" />
               </span>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-900/40 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
+                className="w-full pl-10 pr-11 py-2.5 bg-slate-900/40 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
                 required
                 disabled={isLoading}
                 autoComplete="current-password"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-indigo-400 hover:text-indigo-200 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
@@ -202,7 +192,7 @@ export default function LoginPage() {
           <div className="absolute border-t border-white/20 w-full"></div>
           <span className="bg-[#1f2937] px-3 text-[10px] uppercase tracking-wider font-bold text-indigo-300 relative z-10 rounded">ATAU</span>
         </div>
-        
+
         <div className="flex justify-center">
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
@@ -210,15 +200,15 @@ export default function LoginPage() {
           />
         </div>
 
-{/* Link ke Signup */}
-<div className="mt-5 text-center">
-  <Link
-    href="/signup"
-    className="text-xs text-indigo-300 hover:text-indigo-200 font-semibold transition-colors"
-  >
-    Belum punya akun? <span className="text-white underline">Daftar di sini</span>
-  </Link>
-</div>
+        {/* Link ke Signup */}
+        <div className="mt-5 text-center">
+          <Link
+            href="/signup"
+            className="text-xs text-indigo-300 hover:text-indigo-200 font-semibold transition-colors"
+          >
+            Belum punya akun? <span className="text-white underline">Daftar di sini</span>
+          </Link>
+        </div>
 
         {/* Helper text — akun demo */}
         <div className="mt-5 pt-4 border-t border-white/10">
@@ -227,6 +217,7 @@ export default function LoginPage() {
           </p>
           <ul className="text-[10px] text-slate-400 space-y-0.5 leading-relaxed">
             <li>• Mahasiswa: <code className="text-indigo-300">I0320045</code> (NIM)</li>
+            <li>• Dosen: <code className="text-indigo-300">dosen1@sicpl.test</code> (atau NIP)</li>
             <li>• Kaprodi: <code className="text-indigo-300">kaprodi1@sicpl.test</code></li>
             <li>• Jamu: <code className="text-indigo-300">jamu1@sicpl.test</code></li>
             <li>• Admin: <code className="text-indigo-300">admin1@sicpl.test</code></li>

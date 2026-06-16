@@ -5,16 +5,17 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { 
-  Users, Database, LayoutDashboard, Target, 
-  CheckSquare, ListChecks, BookOpen, MonitorPlay, 
-  GitMerge, Scale, UploadCloud 
+import {
+  Users, Database, LayoutDashboard, Target,
+  CheckSquare, ListChecks, BookOpen, MonitorPlay,
+  GitMerge, Scale, UploadCloud
 } from 'lucide-react';
 import AdminDashboardView from './components/AdminDashboardView';
 import UserManagementView from './components/UserManagementView';
 import UploadDataMasterView from './components/UploadDataMasterView';
 import GenericManageView from './components/GenericManageView';
 import CplManagementView from './components/CplManagementView';
+import IkManagementView from './components/IkManagementView';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -81,7 +82,7 @@ export default function AdminDashboard() {
       case 'cpl':
         return <CplManagementView sessionUser={sessionUser} />;
       case 'ik':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola IK" description="Manajemen Indikator Kinerja (IK)" />;
+        return <IkManagementView sessionUser={sessionUser} />;
       case 'cpmk':
         return <GenericManageView sessionUser={sessionUser} title="Kelola CPMK" description="Manajemen Capaian Pembelajaran Mata Kuliah (CPMK)" />;
       case 'matkul':
@@ -100,12 +101,12 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
       <Navbar
-      portalTitle="SICPL - Admin Panel"
-      prodiLabel="Pusat Data Akademik UNS"
-      userName={sessionUser.name}
-      userNimNip={sessionUser.identifier}
-      userInitials={sessionUser.initials}
-      onLogout={handleLogout}
+        portalTitle="SICPL - Admin Panel"
+        prodiLabel="Pusat Data Akademik UNS"
+        userName={sessionUser.name}
+        userNimNip={sessionUser.identifier}
+        userInitials={sessionUser.initials}
+        onLogout={handleLogout}
       />
 
       <div className="flex flex-1 overflow-hidden">

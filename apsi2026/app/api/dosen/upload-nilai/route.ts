@@ -6,6 +6,7 @@ import {
   UK_CODE_PRIORITY,
   type SiakadBobotMedia,
 } from '@/app/lib/siakadParser';
+import { notifyKoPengampuOnUpload } from '@/app/lib/notifikasiPengampu';
 
 type UploadDetail = {
   baris_excel: number;
@@ -282,6 +283,16 @@ export async function POST(req: NextRequest) {
       }
 
       await conn.commit();
+
+      // 🔔 Notifikasi email ke ko-pengampu (fire-and-forget, tidak blocking response)
+      void notifyKoPengampuOnUpload({
+        id_kelas: idKelas,
+        id_staff_editor: user.id_staff,
+        fileName: file.name,
+        jumlahBerhasil,
+        jumlahGagal,
+        masalahDilaporkan: masalahQueue.length,
+      }).catch((e) => console.error('[notif upload]', e));
 
       return NextResponse.json({
         success: true,
