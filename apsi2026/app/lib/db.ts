@@ -4,41 +4,19 @@
 //
 // File ini hanya dibuat SATU KALI dan tidak perlu diubah-ubah.
 // Semua file API akan import getDb() dari sini.
-//
-// Cara kerja:
-//   - Menggunakan "connection pool" = sekumpulan koneksi yang siap pakai
-//   - Pool dibuat sekali saat server start, tidak dibuat ulang tiap request
-//   - Setiap query mengambil satu koneksi dari pool, lalu mengembalikannya
-//
-// SETUP SEBELUM PAKAI:
-//   1. npm install mysql2
-//   2. Buat file .env.local di root project (JANGAN di-commit ke git!)
-//   3. Isi .env.local sesuai contoh di bawah
 
 import mysql from 'mysql2/promise';
+import type { RowDataPacket, ResultSetHeader, FieldPacket } from 'mysql2/promise';
 
-// Tipe untuk pool — supaya TypeScript tidak bingung
 let pool: mysql.Pool | null = null;
 
-/**
- * Mengembalikan connection pool MySQL.
- * Pool dibuat sekali, kemudian di-reuse.
- *
- * Contoh penggunaan di file API:
- *   const db = getDb();
- *   const [rows] = await db.query('SELECT ...', [param]);
- */
-
 export async function getConnection() {
-  // Pastikan pool sudah ter-inisialisasi sebelum ambil koneksi
   const db = getDb();
   return await db.getConnection();
 }
 
 export function getDb(): mysql.Pool {
-  // Kalau pool belum ada, buat baru
   if (!pool) {
-    // Pastikan semua env variable sudah diset
     if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_NAME) {
       throw new Error(
         '[DB] Variabel environment database belum diset. ' +
@@ -52,11 +30,9 @@ export function getDb(): mysql.Pool {
       user:     process.env.DB_USER,
       password: process.env.DB_PASSWORD ?? '',
       database: process.env.DB_NAME,
-
-      // Pool settings — aman untuk development
-      connectionLimit: 10,      // maksimal 10 koneksi bersamaan
-      waitForConnections: true, // kalau pool penuh, tunggu dulu
-      queueLimit: 0,            // antrian tidak dibatasi
+      connectionLimit: 10,
+      waitForConnections: true,
+      queueLimit: 0,
     });
 
     console.log(`[DB] Pool dibuat → ${process.env.DB_HOST}/${process.env.DB_NAME}`);
@@ -65,13 +41,30 @@ export function getDb(): mysql.Pool {
   return pool;
 }
 
-export async function query<T = any>(
+/**
+ * Helper query — mengembalikan ROWS LANGSUNG (bukan tuple [rows, fields]).
+ *
+ * Contoh penggunaan untuk SELECT:
+ *   const users = await query<{ id: number; name: string }[]>(
+ *     'SELECT id, name FROM users WHERE active = ?', [1]
+ *   );
+ *   users.forEach(u => console.log(u.name));
+ *
+ * Untuk INSERT/UPDATE/DELETE, cast hasil ke ResultSetHeader:
+ *   const r = await query<ResultSetHeader>('INSERT INTO ... VALUES (?)', [x]);
+ *   console.log(r.insertId, r.affectedRows);
+ */
+export async function query<T = RowDataPacket[]>(
   sql: string,
-  params: any[] = []
-): Promise<[T, mysql.FieldPacket[]]> {
+  params: unknown[] = []
+): Promise<T> {
   const db = getDb();
-  return db.query(sql, params) as unknown as Promise<[T, mysql.FieldPacket[]]>;
+  const [rows] = (await db.query(sql, params)) as unknown as [T, FieldPacket[]];
+  return rows;
 }
+
+// Re-export tipe yang sering dipakai
+export type { RowDataPacket, ResultSetHeader, FieldPacket };
 
 // ─────────────────────────────────────────────
 // CONTOH ISI FILE .env.local (taruh di root project):

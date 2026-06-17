@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
         identifier: identifierOut,
         initials,
         prodi: 'Prodi Teknik Industri UNS',
+        force_password_change: 0 as 0 | 1,
       };
 
       return NextResponse.json({ success: true, data: session });

@@ -15,6 +15,8 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 
+import MappingCpmkIkPanel from './MappingCpmkIkPanel';
+
 interface KelasDetailViewProps {
   sessionUser: UserSession;
   idKelas: number;
@@ -89,6 +91,13 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [taList, setTaList] = useState<Array<{
+  id_tahun_akademik: number;
+  kode: string;
+  label: string | null;
+  is_active: 0 | 1;
+}>>([]);
+  const [selectedTa, setSelectedTa] = useState<number | ''>('');
   const [uploadResult, setUploadResult] = useState<{
     status: string;
     jumlah_berhasil: number;
@@ -261,10 +270,11 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
     setUploadResult(null);
     try {
       const raw = sessionStorage.getItem('currentUser') ?? '';
-      const form = new FormData();
-      form.append('file', uploadFile);
-      form.append('id_kelas', String(idKelas));
-      const res = await fetch('/api/dosen/upload-nilai', {
+const form = new FormData();
+form.append('file', uploadFile);
+form.append('id_kelas', String(idKelas));
+if (selectedTa !== '') form.append('id_tahun_akademik', String(selectedTa));
+const res = await fetch('/api/dosen/upload-nilai', {
         method: 'POST',
         headers: { 'x-user-session': raw },
         body: form,
@@ -282,12 +292,29 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
     }
   };
 
-  const closeUploadModal = () => {
-    setShowUpload(false);
-    setUploadFile(null);
-    setUploadResult(null);
-    setUploadError(null);
-  };
+  const openUploadModal = async () => {
+  setShowUpload(true);
+  if (taList.length === 0) {
+    try {
+      const raw = sessionStorage.getItem('currentUser') ?? '';
+      const r = await fetch('/api/dosen/tahun-akademik', { headers: { 'x-user-session': raw } });
+      const j = await r.json();
+      if (r.ok && j.success) {
+        setTaList(j.data.items);
+        if (j.data.active) setSelectedTa(j.data.active.id_tahun_akademik);
+      }
+    } catch {
+      /* abaikan; submit boleh tanpa TA */
+    }
+  }
+};
+
+const closeUploadModal = () => {
+  setShowUpload(false);
+  setUploadFile(null);
+  setUploadResult(null);
+  setUploadError(null);
+};
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) {
@@ -344,11 +371,11 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
             </p>
           </div>
           <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm"
-          >
-            <Upload className="w-4 h-4" /> Upload Nilai SIAKAD
-          </button>
+  onClick={openUploadModal}
+  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm"
+>
+  <Upload className="w-4 h-4" /> Upload Nilai SIAKAD
+</button>
         </div>
       </div>
 
@@ -558,6 +585,8 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
           </div>
         )}
       </div>
+      
+<MappingCpmkIkPanel idKelas={idKelas} />
 
       {/* Upload Modal */}
       {showUpload && (
@@ -574,18 +603,38 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
 
             <div className="p-5 space-y-4">
               {!uploadResult && (
-                <>
-                  <div className="text-sm text-gray-600">
-                    Upload file Excel ekspor dari SIAKAD UNS (.xls / .xlsx). Sistem akan memvalidasi
-                    token, distribusi nilai UK1–UK5 ke komponen MK, dan melaporkan masalah ke modul
-                    data bermasalah.
-                  </div>
-                  <input
-                    type="file"
-                    accept=".xls,.xlsx"
-                    onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                    className="block w-full text-sm border border-gray-300 rounded-lg p-2"
-                  />
+              <>
+  <div className="text-sm text-gray-600">
+    Upload file Excel ekspor dari SIAKAD UNS (.xls / .xlsx). Sistem akan memvalidasi
+    token, distribusi nilai UK1–UK5 ke komponen MK, dan melaporkan masalah ke modul
+    data bermasalah.
+  </div>
+  <div>
+    <label className="block text-xs font-medium text-gray-700 mb-1">
+      Tahun Akademik
+    </label>
+    <select
+      value={selectedTa}
+      onChange={(e) => setSelectedTa(e.target.value === '' ? '' : Number(e.target.value))}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    >
+      <option value="">— pilih TA —</option>
+      {taList.map((ta) => (
+        <option key={ta.id_tahun_akademik} value={ta.id_tahun_akademik}>
+          {ta.label || ta.kode}{ta.is_active ? '  •  Berjalan' : ''}
+        </option>
+      ))}
+    </select>
+    <p className="text-[11px] text-gray-500 mt-1">
+      Default = TA berjalan. Pilih TA lain untuk backdate (mis. nilai semester yang lalu).
+    </p>
+  </div>
+  <input
+    type="file"
+    accept=".xls,.xlsx"
+    onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+    className="block w-full text-sm border border-gray-300 rounded-lg p-2"
+  />
                   {uploadError && (
                     <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                       <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />

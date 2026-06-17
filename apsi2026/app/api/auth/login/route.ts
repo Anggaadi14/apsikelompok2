@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     //   3) staff.nip_nidn_nik (login staff pakai NIP/NIDN/NIK)
     const [rows] = await db.query<any[]>(
       `SELECT
-         u.id_user, u.email, u.sandi_hash, u.role, u.status,
+         u.id_user, u.email, u.sandi_hash, u.role, u.status, u.force_password_change,
          u.id_mahasiswa, u.id_staff, u.nama_input,
          m.nim, m.nama_mahasiswa, m.angkatan,
          s.nip_nidn_nik, s.nama_lengkap, s.peran AS staff_peran
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
       role: user.role,
       id_mahasiswa: user.id_mahasiswa,
       id_staff: user.id_staff,
+      force_password_change: (Number(user.force_password_change) === 1 ? 1 : 0) as 0 | 1,
       // legacy
       id: legacyId,
       username: String(user.email).split('@')[0],

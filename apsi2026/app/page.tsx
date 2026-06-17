@@ -61,7 +61,14 @@ export default function LoginPage() {
 
       if (data.success) {
         sessionStorage.setItem('currentUser', JSON.stringify(data.data));
-        router.push(`/dashboard/${data.data.role}`);
+
+        // Force change password jika flag = 1 (akun dibuat admin)
+        if (data.data.force_password_change === 1) {
+          router.push('/change-password');
+        } else {
+          router.push(`/dashboard/${data.data.role}`);
+        }
+        
       } else {
         setError(data.message || 'Email/NIM/NIP atau password yang Anda masukkan tidak valid.');
       }
@@ -84,7 +91,11 @@ export default function LoginPage() {
       const data = await res.json();
       if (data.success) {
         sessionStorage.setItem('currentUser', JSON.stringify(data.data));
-        router.push(`/dashboard/${data.data.role}`);
+        if (data.data.force_password_change === 1) {
+          router.push('/change-password');
+        } else {
+          router.push(`/dashboard/${data.data.role}`);
+        }
       } else {
         setError(data.message || 'Login dengan Google gagal.');
       }
@@ -134,7 +145,7 @@ export default function LoginPage() {
               <input
                 type="text"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIdentifier(e.target.value)}
                 placeholder="Masukkan email, NIM, atau NIP/NIDN/NIK..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-900/40 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
                 required
@@ -153,7 +164,7 @@ export default function LoginPage() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full pl-10 pr-11 py-2.5 bg-slate-900/40 border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
                 required

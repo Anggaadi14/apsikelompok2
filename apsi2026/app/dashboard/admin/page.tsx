@@ -5,17 +5,23 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import {
-  Users, Database, LayoutDashboard, Target,
-  CheckSquare, ListChecks, BookOpen, MonitorPlay,
-  GitMerge, Scale, UploadCloud
+import { 
+  Users, Database, LayoutDashboard, Target, 
+  CheckSquare, ListChecks, BookOpen, MonitorPlay, 
+  GitMerge, Scale, UploadCloud, CalendarDays 
 } from 'lucide-react';
 import AdminDashboardView from './components/AdminDashboardView';
 import UserManagementView from './components/UserManagementView';
 import UploadDataMasterView from './components/UploadDataMasterView';
 import GenericManageView from './components/GenericManageView';
+import BobotIkCplView from './components/BobotIkCplView';
 import CplManagementView from './components/CplManagementView';
+import TahunAkademikView from './components/TahunAkademikView';
+import KelasTayangView from './components/KelasTayangView';
 import IkManagementView from './components/IkManagementView';
+import CpmkManagementView from './components/CpmkManagementView';
+import MatkulManagementView from './components/MatkulManagementView';
+import MappingCpmkIkView from './components/MappingCpmkIkView';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -46,6 +52,7 @@ export default function AdminDashboard() {
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'users', label: 'Manajemen User', icon: <Users className="w-5 h-5" /> },
     { id: 'upload', label: 'Upload Data Master', icon: <UploadCloud className="w-5 h-5" /> },
+    { id: 'tahun_akademik', label: 'Tahun Akademik', icon: <CalendarDays className="w-5 h-5" /> },
     { id: 'cpl', label: 'Kelola CPL', icon: <Target className="w-5 h-5" /> },
     { id: 'ik', label: 'Kelola IK', icon: <CheckSquare className="w-5 h-5" /> },
     { id: 'cpmk', label: 'Kelola CPMK', icon: <ListChecks className="w-5 h-5" /> },
@@ -79,20 +86,22 @@ export default function AdminDashboard() {
         return <UserManagementView sessionUser={sessionUser} />;
       case 'upload':
         return <UploadDataMasterView sessionUser={sessionUser} />;
+      case 'tahun_akademik':
+        return <TahunAkademikView sessionUser={sessionUser} />;
       case 'cpl':
         return <CplManagementView sessionUser={sessionUser} />;
       case 'ik':
         return <IkManagementView sessionUser={sessionUser} />;
       case 'cpmk':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola CPMK" description="Manajemen Capaian Pembelajaran Mata Kuliah (CPMK)" />;
+        return <CpmkManagementView sessionUser={sessionUser} />;
       case 'matkul':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola Mata Kuliah" description="Manajemen Data Mata Kuliah dan Kurikulum" />;
+        return <MatkulManagementView sessionUser={sessionUser} />;
       case 'kelas':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola Kelas Tayang" description="Manajemen Pembukaan Kelas per Semester" />;
+        return <KelasTayangView />;
       case 'mapping':
-        return <GenericManageView sessionUser={sessionUser} title="Mapping CPMK-IK-CPL" description="Pemetaan hubungan antara CPMK, IK, dan CPL" />;
+        return <MappingCpmkIkView sessionUser={sessionUser} />;
       case 'bobot':
-        return <GenericManageView sessionUser={sessionUser} title="Kelola Bobot" description="Manajemen Bobot Evaluasi dan Penilaian" />;
+        return <BobotIkCplView sessionUser={sessionUser} />;
       default:
         return <AdminDashboardView sessionUser={sessionUser} />;
     }
@@ -101,12 +110,12 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased">
       <Navbar
-        portalTitle="SICPL - Admin Panel"
-        prodiLabel="Pusat Data Akademik UNS"
-        userName={sessionUser.name}
-        userNimNip={sessionUser.identifier}
-        userInitials={sessionUser.initials}
-        onLogout={handleLogout}
+      portalTitle="SICPL - Admin Panel"
+      prodiLabel="Pusat Data Akademik UNS"
+      userName={sessionUser.name}
+      userNimNip={sessionUser.identifier}
+      userInitials={sessionUser.initials}
+      onLogout={handleLogout}
       />
 
       <div className="flex flex-1 overflow-hidden">

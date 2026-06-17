@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const file = form.get('file');
     const idKelasRaw = form.get('id_kelas');
+    const idTaRaw = form.get('id_tahun_akademik');
     if (!(file instanceof File)) {
       return NextResponse.json(
         { success: false, error: 'BAD_REQUEST', message: 'Field "file" wajib diisi (Excel SIAKAD).' },
@@ -44,7 +45,34 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-
+    
+// Resolve id_tahun_akademik (opsional). Kalau dosen kirim eksplisit -> validasi keberadaannya.
+// Kalau tidak -> pakai TA yang is_active = 1. Boleh tetap null kalau belum ada TA aktif.
+let idTahunAkademik: number | null = null;
+if (idTaRaw !== null && String(idTaRaw).trim() !== '') {
+  const n = Number(idTaRaw);
+  if (!Number.isInteger(n) || n <= 0) {
+    return NextResponse.json(
+      { success: false, error: 'BAD_REQUEST', message: 'Field "id_tahun_akademik" tidak valid.' },
+      { status: 400 },
+    );
+  }
+  const ok = (await query(
+    `SELECT 1 FROM tahun_akademik WHERE id_tahun_akademik = ? LIMIT 1`, [n],
+  )) as Array<unknown>;
+  if (ok.length === 0) {
+    return NextResponse.json(
+      { success: false, error: 'BAD_REQUEST', message: 'Tahun Akademik tidak ditemukan.' },
+      { status: 400 },
+    );
+  }
+  idTahunAkademik = n;
+} else {
+  const act = (await query(
+    `SELECT id_tahun_akademik FROM tahun_akademik WHERE is_active = 1 LIMIT 1`,
+  )) as Array<{ id_tahun_akademik: number }>;
+  idTahunAkademik = act.length > 0 ? Number(act[0].id_tahun_akademik) : null;
+}
     // 2) Verifikasi ownership
     const ownership = (await query(
       `SELECT 1 FROM mapping_dosen_kelas WHERE id_kelas = ? AND id_staff = ? LIMIT 1`,
@@ -249,23 +277,24 @@ export async function POST(req: NextRequest) {
       const statusUpload =
         jumlahGagal === 0 ? 'sukses' : jumlahBerhasil === 0 ? 'gagal' : 'sebagian';
 
-      const [logResult] = await conn.query(
-        `INSERT INTO upload_log_nilai
-           (id_kelas, id_staff_uploader, nama_file, token_siakad, token_valid,
-            jumlah_baris, jumlah_berhasil, jumlah_gagal, status, detail, uploaded_at)
-         VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, NOW())`,
-        [
-          idKelas,
-          user.id_staff,
-          file.name,
-          parsed.token,
-          parsed.rows.length,
-          jumlahBerhasil,
-          jumlahGagal,
-          statusUpload,
-          JSON.stringify({ warnings: parsed.warnings, bobot_media: parsed.bobot_media, details }),
-        ],
-      );
+    const [logResult] = await conn.query(
+      `INSERT INTO upload_log_nilai
+        (id_kelas, id_tahun_akademik, id_staff_uploader, nama_file, token_siakad, token_valid,
+          jumlah_baris, jumlah_berhasil, jumlah_gagal, status, detail, uploaded_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, NOW())`,
+      [
+        idKelas,
+        idTahunAkademik,
+        user.id_staff,
+        file.name,
+        parsed.token,
+        parsed.rows.length,
+        jumlahBerhasil,
+        jumlahGagal,
+        statusUpload,
+        JSON.stringify({ warnings: parsed.warnings, bobot_media: parsed.bobot_media, details }),
+      ],
+    );
       const idUploadLog = (logResult as { insertId: number }).insertId;
 
       for (const m of masalahQueue) {
@@ -298,6 +327,7 @@ export async function POST(req: NextRequest) {
         success: true,
         data: {
           id_upload_log: idUploadLog,
+          id_tahun_akademik: idTahunAkademik,
           status: statusUpload,
           jumlah_baris: parsed.rows.length,
           jumlah_berhasil: jumlahBerhasil,

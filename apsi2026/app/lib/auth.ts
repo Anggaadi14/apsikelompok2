@@ -24,6 +24,7 @@ export interface SessionUser {
   id_mahasiswa: number | null
   id_staff: number | null
   role: UserRole
+  force_password_change?: 0 | 1
 
   // Legacy compat
   id: string
@@ -99,8 +100,10 @@ export function parseSessionHeader(raw: string | null): SessionUser {
     parsed.id ||
     (id_mahasiswa ? `mhs_${id_mahasiswa}` : id_staff ? `staff_${id_staff}` : '')
 
+  const force_password_change = (Number(parsed.force_password_change) === 1 ? 1 : 0) as 0 | 1;
   return {
     id_user,
+    force_password_change,
     email: parsed.email || '',
     id_mahasiswa,
     id_staff,

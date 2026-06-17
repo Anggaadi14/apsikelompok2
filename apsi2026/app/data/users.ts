@@ -2,12 +2,14 @@ export type UserRole = 'mahasiswa' | 'kaprodi' | 'dosen' | 'admin' | 'jamu';
 
 export interface UserSession {
   id: string;
+  id_user?: number;
   username: string;
   name: string;
   role: UserRole;
   identifier: string;
   initials: string;
   prodi: string;
+  force_password_change?: 0 | 1;
 }
 
 /**

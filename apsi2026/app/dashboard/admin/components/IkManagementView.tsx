@@ -1,400 +1,213 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { UserSession } from '../../../data/users';
-import {
-  Plus, Search, CheckSquare, AlertCircle, CheckCircle,
-  Loader2, Filter, Info, X,
-} from 'lucide-react';
+import { CheckSquare, Plus, Search, Edit, Trash2, Loader2, AlertCircle, CheckCircle2, X, Filter } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 
-interface IkManagementViewProps {
-  sessionUser: UserSession;
-}
+interface IkManagementViewProps { sessionUser: UserSession; }
 
 interface IkItem {
-  id_ik: number;
-  id_cpl: number;
-  kode_ik: string;
-  deskripsi: string;
-  urutan: number;
-  kode_cpl: string;
-  singkatan_cpl: string;
-  domain_cpl: string;
-  id_kurikulum: number;
-  kode_kurikulum: string;
-  nama_kurikulum: string;
+  id_ik: number; id_cpl: number; kode_ik: string; deskripsi: string; urutan: number;
+  kode_cpl: string; singkatan_cpl: string; id_kurikulum: number; kode_kurikulum: string;
+}
+interface CplOpt { id_cpl: number; id_kurikulum: number; kode_cpl: string; singkatan: string; domain: string; kode_kurikulum: string; kurikulum_active: number; }
+
+function authHeaders(): Record<string, string> {
+  const raw = typeof window !== 'undefined' ? sessionStorage.getItem('currentUser') : null;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (raw) headers['x-user-session'] = raw;
+  return headers;
 }
 
-interface CplOption {
-  id_cpl: number;
-  kode_cpl: string;
-  singkatan: string;
-  domain: string;
-  deskripsi_id: string;
-  id_kurikulum: number;
-  kode_kurikulum: string;
-  nama_kurikulum: string;
-  is_active: number;
-}
-
-export default function IkManagementView({ sessionUser: _sessionUser }: IkManagementViewProps) {
-  // Data
+export default function IkManagementView({ sessionUser: _su }: IkManagementViewProps) {
   const [ikList, setIkList] = useState<IkItem[]>([]);
-  const [cplList, setCplList] = useState<CplOption[]>([]);
+  const [cplList, setCplList] = useState<CplOpt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fetchingError, setFetchingError] = useState<string | null>(null);
-
-  // Filter
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterKurikulum, setFilterKurikulum] = useState<string>('all');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterKur, setFilterKur] = useState<string>('all');
   const [filterCpl, setFilterCpl] = useState<string>('all');
-
-  // Form / Modal
-  const [showForm, setShowForm] = useState(false);
-  const [formIdCpl, setFormIdCpl] = useState<string>('');
-  const [formKodeIk, setFormKodeIk] = useState('');
-  const [formDeskripsi, setFormDeskripsi] = useState('');
-  const [formUrutan, setFormUrutan] = useState<number>(1);
-
-  // Status
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // form
+  const [fIdCpl, setFIdCpl] = useState<string>('');
+  const [fKode, setFKode] = useState('');
+  const [fDesk, setFDesk] = useState('');
+  const [fUrutan, setFUrutan] = useState<number>(0);
 
-  const loadData = async () => {
-    setLoading(true);
-    setFetchingError(null);
+  const fetchData = useCallback(async () => {
+    setLoading(true); setError(null);
     try {
-      const rawSession = sessionStorage.getItem('currentUser') ?? '';
-      const res = await fetch('/api/admin/ik', {
-        headers: { 'x-user-session': rawSession },
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.message ?? `HTTP ${res.status}`);
-      }
-      setIkList(json.data.ikList as IkItem[]);
-      setCplList(json.data.cplList as CplOption[]);
-    } catch (e: any) {
-      setFetchingError(e?.message ?? 'Gagal memuat data IK.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
+      const res = await fetch('/api/admin/ik', { headers: authHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) { setError(json.message || 'Gagal memuat IK.'); setIkList([]); }
+      else { setIkList((json.data?.ikList as IkItem[]) ?? []); setCplList((json.data?.cplList as CplOpt[]) ?? []); }
+    } catch { setError('Tidak dapat terhubung ke server.'); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const resetForm = () => {
-    setFormIdCpl('');
-    setFormKodeIk('');
-    setFormDeskripsi('');
-    setFormUrutan(1);
-    setValidationError(null);
+  const kurOptions = useMemo(() => Array.from(new Set(cplList.map((c: CplOpt) => c.kode_kurikulum))), [cplList]);
+  const filteredCpl = useMemo(() => cplList.filter((c: CplOpt) => filterKur === 'all' || c.kode_kurikulum === filterKur), [cplList, filterKur]);
+
+  const filteredIk = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return ikList.filter((r: IkItem) => {
+      if (filterKur !== 'all' && r.kode_kurikulum !== filterKur) return false;
+      if (filterCpl !== 'all' && String(r.id_cpl) !== filterCpl) return false;
+      if (!q) return true;
+      return r.kode_ik.toLowerCase().includes(q) || r.deskripsi.toLowerCase().includes(q) || r.kode_cpl.toLowerCase().includes(q);
+    });
+  }, [ikList, filterKur, filterCpl, search]);
+
+  const openCreate = () => {
+    setEditId(null); setFIdCpl(''); setFKode(''); setFDesk(''); setFUrutan(0);
+    setShowModal(true); setError(null); setSuccess(null);
   };
-
-  const openForm = () => {
-    resetForm();
-    setSuccessMessage(null);
-    setShowForm(true);
+  const openEdit = (r: IkItem) => {
+    setEditId(r.id_ik); setFIdCpl(String(r.id_cpl)); setFKode(r.kode_ik); setFDesk(r.deskripsi); setFUrutan(r.urutan);
+    setShowModal(true); setError(null); setSuccess(null);
   };
+  const closeModal = () => { if (!submitting) setShowModal(false); };
 
-  const closeForm = () => {
-    setShowForm(false);
-    resetForm();
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setValidationError(null);
-    setSuccessMessage(null);
-    setSubmitting(true);
-
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setSubmitting(true); setError(null);
     try {
-      const rawSession = sessionStorage.getItem('currentUser') ?? '';
-      const res = await fetch('/api/admin/ik', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-session': rawSession,
-        },
-        body: JSON.stringify({
-          id_cpl: formIdCpl ? Number(formIdCpl) : null,
-          kode_ik: formKodeIk,
-          deskripsi: formDeskripsi,
-          urutan: formUrutan,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        setValidationError(json.message ?? `HTTP ${res.status}`);
-        return;
-      }
-      setSuccessMessage(json.message ?? 'IK berhasil disimpan.');
-      closeForm();
-      await loadData();
-    } catch (e: any) {
-      setValidationError(e?.message ?? 'Gagal menyimpan IK.');
-    } finally {
-      setSubmitting(false);
-    }
+      const body = { id_cpl: Number(fIdCpl), kode_ik: fKode.trim(), deskripsi: fDesk.trim(), urutan: fUrutan };
+      const url = editId ? `/api/admin/ik/${editId}` : '/api/admin/ik';
+      const method = editId ? 'PATCH' : 'POST';
+      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
+      else { setSuccess(json.message || 'Tersimpan.'); setShowModal(false); fetchData(); }
+    } catch { setError('Tidak dapat terhubung ke server.'); }
+    finally { setSubmitting(false); }
   };
 
-  // Derived
-  const kurikulumOptions = Array.from(
-    new Map(
-      cplList.map((c) => [
-        c.id_kurikulum,
-        { id: c.id_kurikulum, label: `${c.kode_kurikulum} — ${c.nama_kurikulum}`, is_active: c.is_active },
-      ])
-    ).values()
-  );
-
-  const filteredCplDropdown = filterKurikulum === 'all'
-    ? cplList
-    : cplList.filter((c) => String(c.id_kurikulum) === filterKurikulum);
-
-  const filteredIk = ikList.filter((ik) => {
-    if (filterKurikulum !== 'all' && String(ik.id_kurikulum) !== filterKurikulum) return false;
-    if (filterCpl !== 'all' && String(ik.id_cpl) !== filterCpl) return false;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      return (
-        ik.kode_ik.toLowerCase().includes(q) ||
-        ik.deskripsi.toLowerCase().includes(q) ||
-        ik.kode_cpl.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const remove = async (r: IkItem) => {
+    if (!confirm(`Hapus IK ${r.kode_ik}?`)) return;
+    setError(null); setSuccess(null);
+    const res = await fetch(`/api/admin/ik/${r.id_ik}`, { method: 'DELETE', headers: authHeaders() });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.success) setError(json.message || 'Gagal hapus.');
+    else { setSuccess(json.message || 'Terhapus.'); fetchData(); }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <CheckSquare className="w-8 h-8 text-indigo-600" />
-            Kelola Indikator Kinerja (IK)
-          </h1>
-          <p className="text-gray-600 mt-1">Manajemen IK yang terhubung dengan CPL pada setiap kurikulum.</p>
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center mt-1"><CheckSquare className="w-5 h-5" /></div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Kelola Indikator Kinerja (IK)</h1>
+            <p className="text-gray-600 mt-1">Manajemen IK turunan CPL. IK dipakai untuk mapping CPMK dan agregasi nilai.</p>
+          </div>
         </div>
-        <button
-          onClick={openForm}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-sm transition shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah IK
+        <button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium">
+          <Plus className="w-4 h-4" /> Tambah IK
         </button>
       </div>
 
-      {/* Success flash */}
-      {successMessage && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-emerald-800 text-sm">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{successMessage}</span>
-        </div>
-      )}
+      {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-700"><AlertCircle className="w-5 h-5 flex-shrink-0" /> {error}</div>}
+      {success && <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-2 text-sm text-green-700"><CheckCircle2 className="w-5 h-5 flex-shrink-0" /> {success}</div>}
 
-      {/* Filter + Search */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row gap-3">
-        <div className="flex-1 relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Cari kode IK, deskripsi, atau kode CPL..."
-            className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-          />
+      {/* Filter bar */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+          <Search className="w-4 h-4 text-gray-400" />
+          <input type="text" value={search} onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} placeholder="Cari kode IK / deskripsi / kode CPL..." className="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
         </div>
-        <div className="flex gap-3 flex-wrap">
-          <div className="relative">
-            <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <select
-              value={filterKurikulum}
-              onChange={(e) => { setFilterKurikulum(e.target.value); setFilterCpl('all'); }}
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-            >
-              <option value="all">Semua Kurikulum</option>
-              {kurikulumOptions.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.label}{k.is_active ? ' (aktif)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="relative">
-            <Filter className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <select
-              value={filterCpl}
-              onChange={(e) => setFilterCpl(e.target.value)}
-              className="pl-10 pr-8 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-            >
-              <option value="all">Semua CPL</option>
-              {filteredCplDropdown.map((c) => (
-                <option key={c.id_cpl} value={c.id_cpl}>
-                  {c.kode_cpl} — {c.singkatan}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <select value={filterKur} onChange={(e: ChangeEvent<HTMLSelectElement>) => { setFilterKur(e.target.value); setFilterCpl('all'); }} className="text-sm border-gray-300 rounded-md shadow-sm">
+            <option value="all">Semua Kurikulum</option>
+            {kurOptions.map((k: string) => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <select value={filterCpl} onChange={(e: ChangeEvent<HTMLSelectElement>) => setFilterCpl(e.target.value)} className="text-sm border-gray-300 rounded-md shadow-sm">
+            <option value="all">Semua CPL</option>
+            {filteredCpl.map((c: CplOpt) => <option key={c.id_cpl} value={String(c.id_cpl)}>{c.kode_cpl} ({c.singkatan})</option>)}
+          </select>
         </div>
       </div>
 
-      {/* Fetch error */}
-      {fetchingError && (
-        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-800 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{fetchingError}</span>
-        </div>
-      )}
-
-      {/* List */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-10 flex flex-col items-center gap-2 text-gray-500">
-            <Loader2 className="w-6 h-6 animate-spin" />
-            <span className="text-sm font-medium">Memuat data IK...</span>
-          </div>
-        ) : filteredIk.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">
-            <Info className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-sm">Belum ada IK yang cocok dengan filter.</p>
-          </div>
-        ) : (
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-gray-500 bg-white border border-gray-200 rounded-xl"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Memuat IK…</div>
+      ) : filteredIk.length === 0 ? (
+        <div className="py-12 text-center text-sm text-gray-500 bg-white border border-gray-200 rounded-xl">Tidak ada IK.</div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3 text-left">Kode IK</th>
-                  <th className="px-4 py-3 text-left">CPL</th>
-                  <th className="px-4 py-3 text-left">Kurikulum</th>
-                  <th className="px-4 py-3 text-left">Deskripsi</th>
-                  <th className="px-4 py-3 text-center">Urutan</th>
+                  <th className="px-4 py-2 text-left w-28">Kode IK</th>
+                  <th className="px-4 py-2 text-left w-40">CPL Induk</th>
+                  <th className="px-4 py-2 text-left">Deskripsi</th>
+                  <th className="px-4 py-2 text-center w-20">Urutan</th>
+                  <th className="px-4 py-2 text-right w-28">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredIk.map((ik) => (
-                  <tr key={ik.id_ik} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-semibold text-indigo-700 whitespace-nowrap">{ik.kode_ik}</td>
-                    <td className="px-4 py-3">
-                      <div className="text-gray-900 font-medium">{ik.kode_cpl}</div>
-                      <div className="text-xs text-gray-500">{ik.singkatan_cpl} • {ik.domain_cpl}</div>
+                {filteredIk.map((r: IkItem) => (
+                  <tr key={r.id_ik} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 font-mono text-xs text-gray-800">{r.kode_ik}</td>
+                    <td className="px-4 py-2">
+                      <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{r.singkatan_cpl}</span>
+                      <span className="ml-1 text-xs text-gray-500">{r.kode_cpl} / {r.kode_kurikulum}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{ik.kode_kurikulum}</td>
-                    <td className="px-4 py-3 text-gray-700">{ik.deskripsi}</td>
-                    <td className="px-4 py-3 text-center text-xs text-gray-500">{ik.urutan}</td>
+                    <td className="px-4 py-2 text-gray-700">{r.deskripsi}</td>
+                    <td className="px-4 py-2 text-center text-gray-600">{r.urutan}</td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="inline-flex gap-1">
+                        <button onClick={() => openEdit(r)} title="Edit" className="p-1.5 rounded-md hover:bg-gray-100 text-gray-700"><Edit className="w-4 h-4" /></button>
+                        <button onClick={() => remove(r)} title="Hapus" className="p-1.5 rounded-md hover:bg-red-50 text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Modal Form */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">Tambah IK Baru</h2>
-              <button onClick={closeForm} className="text-gray-400 hover:text-gray-600" aria-label="Tutup">
-                <X className="w-5 h-5" />
-              </button>
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={closeModal}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">{editId ? 'Edit IK' : 'Tambah IK'}</h2>
+              <button onClick={closeModal} className="p-1 rounded-md hover:bg-gray-100"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {validationError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2 text-rose-800 text-sm">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{validationError}</span>
-                </div>
-              )}
-
+            <form onSubmit={submit} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  CPL Terkait <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formIdCpl}
-                  onChange={(e) => setFormIdCpl(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-                  disabled={submitting}
-                >
-                  <option value="">— Pilih CPL —</option>
-                  {cplList.map((c) => (
-                    <option key={c.id_cpl} value={c.id_cpl}>
-                      [{c.kode_kurikulum}] {c.kode_cpl} — {c.singkatan} ({c.domain})
-                    </option>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 mb-1">CPL Induk *</label>
+                <select required value={fIdCpl} onChange={(e: ChangeEvent<HTMLSelectElement>) => setFIdCpl(e.target.value)} className="w-full text-sm border-gray-300 rounded-md shadow-sm">
+                  <option value="">-- Pilih CPL --</option>
+                  {cplList.map((c: CplOpt) => <option key={c.id_cpl} value={String(c.id_cpl)}>{c.kode_kurikulum} · {c.kode_cpl} ({c.singkatan})</option>)}
                 </select>
-                <p className="text-[11px] text-gray-500 mt-1">IK harus terhubung ke CPL — wajib dipilih.</p>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Kode IK <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formKodeIk}
-                    onChange={(e) => setFormKodeIk(e.target.value)}
-                    placeholder="Contoh: I-1, II-3"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-                    disabled={submitting}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kode IK *</label>
+                  <input required type="text" maxLength={20} value={fKode} onChange={(e: ChangeEvent<HTMLInputElement>) => setFKode(e.target.value)} placeholder="IK-1" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Urutan</label>
-                  <input
-                    type="number"
-                    value={formUrutan}
-                    onChange={(e) => setFormUrutan(Number(e.target.value))}
-                    min={0}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-                    disabled={submitting}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Urutan</label>
+                  <input type="number" min={0} value={fUrutan} onChange={(e: ChangeEvent<HTMLInputElement>) => setFUrutan(Number(e.target.value) || 0)} className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
                 </div>
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Deskripsi IK <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  value={formDeskripsi}
-                  onChange={(e) => setFormDeskripsi(e.target.value)}
-                  rows={3}
-                  placeholder="Deskripsi indikator kinerja..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none"
-                  disabled={submitting}
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi *</label>
+                <textarea required rows={3} value={fDesk} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFDesk(e.target.value)} placeholder="Mampu mengidentifikasi…" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
               </div>
-
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Menyimpan...
-                    </>
-                  ) : (
-                    'Simpan IK'
-                  )}
+                <button type="button" onClick={closeModal} disabled={submitting} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
+                <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">
+                  {submitting && <Loader2 className="w-4 h-4 animate-spin" />} {editId ? 'Simpan' : 'Tambah'}
                 </button>
               </div>
             </form>
