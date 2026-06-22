@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query, getConnection } from '@/app/lib/db';
-import type { PoolConnection } from 'mysql2/promise';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,36 +11,60 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const kur = url.searchParams.get('kur') || '';
 
-    const where: string[] = [];
-    const params: unknown[] = [];
+    const admin = createSupabaseAdminClient();
+
+    const { data: mkRows, error } = await admin
+      .from('mata_kuliah')
+      .select('id_mata_kuliah, kode_mk, nama_mk, sks, singkatan')
+      .order('kode_mk');
+    if (error) throw error;
+
+    const { data: linkRows, error: linkErr } = await admin
+      .from('kurikulum_mk')
+      .select('id_mata_kuliah, id_kurikulum, is_wajib, semester_default, kurikulum:id_kurikulum ( kode, tahun_mulai )');
+    if (linkErr) throw linkErr;
+
+    const { data: kurList, error: kurErr } = await admin
+      .from('kurikulum')
+      .select('id_kurikulum, kode, nama, is_active')
+      .order('tahun_mulai', { ascending: false });
+    if (kurErr) throw kurErr;
+
+    let mkIdsInKur: Set<number> | null = null;
     if (kur) {
-      where.push('mk.id_mata_kuliah IN (SELECT km.id_mata_kuliah FROM kurikulum_mk km JOIN kurikulum k ON k.id_kurikulum = km.id_kurikulum WHERE k.kode = ? OR k.id_kurikulum = ?)');
-      params.push(kur, Number(kur) || 0);
+      mkIdsInKur = new Set(
+        (linkRows ?? [])
+          .filter((r: any) => r.kurikulum?.kode === kur || String(r.id_kurikulum) === kur)
+          .map((r: any) => r.id_mata_kuliah),
+      );
     }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    const rows = (await query(
-      `SELECT mk.id_mata_kuliah, mk.kode_mk, mk.nama_mk, mk.sks, mk.singkatan,
-              (SELECT COUNT(*) FROM kurikulum_mk WHERE id_mata_kuliah = mk.id_mata_kuliah) AS jumlah_kurikulum,
-              (SELECT COUNT(*) FROM cpmk WHERE id_mata_kuliah = mk.id_mata_kuliah) AS jumlah_cpmk
-       FROM mata_kuliah mk
-       ${whereSql}
-       ORDER BY mk.kode_mk`,
-      params,
-    )) as Array<{ id_mata_kuliah:number; kode_mk:string; nama_mk:string; sks:number; singkatan:string|null; jumlah_kurikulum:number; jumlah_cpmk:number }>;
+    const cpmkCounts = new Map<number, number>();
+    const { data: cpmkRows } = await admin.from('cpmk').select('id_mata_kuliah');
+    for (const c of cpmkRows ?? []) cpmkCounts.set(c.id_mata_kuliah, (cpmkCounts.get(c.id_mata_kuliah) ?? 0) + 1);
+    const kurCounts = new Map<number, number>();
+    for (const l of linkRows ?? []) kurCounts.set(l.id_mata_kuliah, (kurCounts.get(l.id_mata_kuliah) ?? 0) + 1);
 
-    const links = (await query(
-      `SELECT km.id_mata_kuliah, km.id_kurikulum, km.is_wajib, km.semester_default,
-              k.kode AS kode_kurikulum
-       FROM kurikulum_mk km JOIN kurikulum k ON k.id_kurikulum = km.id_kurikulum
-       ORDER BY k.tahun_mulai DESC, k.kode`,
-    )) as Array<{ id_mata_kuliah:number; id_kurikulum:number; is_wajib:number; semester_default:number|null; kode_kurikulum:string }>;
+    let mkList = (mkRows ?? []).map((mk) => ({
+      ...mk,
+      jumlah_kurikulum: kurCounts.get(mk.id_mata_kuliah) ?? 0,
+      jumlah_cpmk: cpmkCounts.get(mk.id_mata_kuliah) ?? 0,
+    }));
+    if (mkIdsInKur) mkList = mkList.filter((mk) => mkIdsInKur!.has(mk.id_mata_kuliah));
 
-    const kurList = (await query(
-      `SELECT id_kurikulum, kode, nama, is_active FROM kurikulum ORDER BY tahun_mulai DESC`,
-    )) as Array<{ id_kurikulum:number; kode:string; nama:string; is_active:number }>;
+    const links = (linkRows ?? [])
+      .map((r: any) => ({
+        id_mata_kuliah: r.id_mata_kuliah,
+        id_kurikulum: r.id_kurikulum,
+        is_wajib: r.is_wajib,
+        semester_default: r.semester_default,
+        kode_kurikulum: r.kurikulum?.kode,
+        _tahun: r.kurikulum?.tahun_mulai ?? 0,
+      }))
+      .sort((a: any, b: any) => b._tahun - a._tahun || (a.kode_kurikulum ?? '').localeCompare(b.kode_kurikulum ?? ''))
+      .map(({ _tahun, ...rest }: any) => rest);
 
-    return NextResponse.json({ success: true, data: { mkList: rows, links, kurList } });
+    return NextResponse.json({ success: true, data: { mkList, links, kurList } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[GET /api/admin/matkul]', err);
@@ -50,7 +73,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let conn: PoolConnection | null = null;
   try {
     await requireRole(req, ['admin']);
     const body = await req.json().catch(() => ({}));
@@ -58,7 +80,7 @@ export async function POST(req: NextRequest) {
     const nama_mk = String(body?.nama_mk || '').trim();
     const singkatan = body?.singkatan ? String(body.singkatan).trim() : null;
     const sks = Number(body?.sks);
-    const links: Array<{ id_kurikulum:number; is_wajib?:number|boolean; semester_default?:number|null }> = Array.isArray(body?.links) ? body.links : [];
+    const links: Array<{ id_kurikulum: number; is_wajib?: number | boolean; semester_default?: number | null }> = Array.isArray(body?.links) ? body.links : [];
 
     if (!kode_mk || kode_mk.length > 30) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Kode MK wajib (maks 30).' }, { status: 400 });
@@ -70,35 +92,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'SKS harus 0..99.' }, { status: 400 });
     }
 
-    const dup = (await query(`SELECT id_mata_kuliah FROM mata_kuliah WHERE kode_mk=? LIMIT 1`, [kode_mk])) as Array<{id_mata_kuliah:number}>;
-    if (dup.length) {
+    const admin = createSupabaseAdminClient();
+
+    const { data: dup } = await admin.from('mata_kuliah').select('id_mata_kuliah').eq('kode_mk', kode_mk).maybeSingle();
+    if (dup) {
       return NextResponse.json({ success: false, error: 'DUPLICATE', message: `Kode MK '${kode_mk}' sudah ada.` }, { status: 409 });
     }
 
-    conn = await getConnection();
-    await conn.beginTransaction();
-    const [insertRes] = await conn.query(
-      `INSERT INTO mata_kuliah (kode_mk, nama_mk, sks, singkatan) VALUES (?,?,?,?)`,
-      [kode_mk, nama_mk, sks, singkatan],
-    );
-    const id_mata_kuliah = (insertRes as unknown as { insertId: number }).insertId;
+    const { data: ins, error: insErr } = await admin
+      .from('mata_kuliah')
+      .insert({ kode_mk, nama_mk, sks, singkatan })
+      .select('id_mata_kuliah')
+      .single();
+    if (insErr) throw insErr;
+    const id_mata_kuliah = ins.id_mata_kuliah;
 
-    for (const lk of links) {
-      const idK = Number(lk?.id_kurikulum);
-      if (!Number.isInteger(idK) || idK <= 0) continue;
-      const wajib = lk?.is_wajib === false || lk?.is_wajib === 0 ? 0 : 1;
-      const sem = lk?.semester_default != null && lk.semester_default !== ('' as unknown) ? Number(lk.semester_default) : null;
-      await conn.query(
-        `INSERT INTO kurikulum_mk (id_kurikulum, id_mata_kuliah, is_wajib, semester_default) VALUES (?,?,?,?)`,
-        [idK, id_mata_kuliah, wajib, sem],
-      );
+    const linkRows = links
+      .map((lk) => ({
+        id_kurikulum: Number(lk?.id_kurikulum),
+        id_mata_kuliah,
+        is_wajib: !(lk?.is_wajib === false || lk?.is_wajib === 0),
+        semester_default: lk?.semester_default != null && lk.semester_default !== ('' as unknown) ? Number(lk.semester_default) : null,
+      }))
+      .filter((lk) => Number.isInteger(lk.id_kurikulum) && lk.id_kurikulum > 0);
+    if (linkRows.length > 0) {
+      const { error: linkErr } = await admin.from('kurikulum_mk').insert(linkRows);
+      if (linkErr) throw linkErr;
     }
-    await conn.commit();
+
     return NextResponse.json({ success: true, message: `MK ${kode_mk} berhasil ditambahkan.`, data: { id_mata_kuliah } });
   } catch (err) {
-    if (conn) { try { await conn.rollback(); } catch {} }
     const a = handleAuthError(err); if (a) return a;
     console.error('[POST /api/admin/matkul]', err);
     return serverError('Gagal menambah mata kuliah.');
-  } finally { if (conn) conn.release(); }
+  }
 }

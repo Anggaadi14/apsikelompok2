@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,32 +12,50 @@ export async function GET(req: NextRequest) {
     const idMk = url.searchParams.get('id_mk');
     const kur = url.searchParams.get('kur') || '';
 
-    const where: string[] = [];
-    const params: unknown[] = [];
-    if (idMk) { where.push('cpmk.id_mata_kuliah = ?'); params.push(Number(idMk)); }
+    const admin = createSupabaseAdminClient();
+
+    let kurMkIds: Set<number> | null = null;
     if (kur) {
-      where.push('cpmk.id_mata_kuliah IN (SELECT km.id_mata_kuliah FROM kurikulum_mk km JOIN kurikulum k ON k.id_kurikulum = km.id_kurikulum WHERE k.kode = ? OR k.id_kurikulum = ?)');
-      params.push(kur, Number(kur) || 0);
+      const { data: kurMk } = await admin
+        .from('kurikulum_mk')
+        .select('id_mata_kuliah, kurikulum:id_kurikulum ( id_kurikulum, kode )');
+      kurMkIds = new Set(
+        (kurMk ?? [])
+          .filter((r: any) => r.kurikulum?.kode === kur || String(r.kurikulum?.id_kurikulum) === kur)
+          .map((r: any) => r.id_mata_kuliah),
+      );
     }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    const rows = (await query(
-      `SELECT cpmk.id_cpmk, cpmk.id_mata_kuliah, cpmk.kode_cpmk, cpmk.deskripsi_id, cpmk.deskripsi_en, cpmk.urutan,
-              mk.kode_mk, mk.nama_mk, mk.singkatan AS singkatan_mk
-       FROM cpmk
-       JOIN mata_kuliah mk ON mk.id_mata_kuliah = cpmk.id_mata_kuliah
-       ${whereSql}
-       ORDER BY mk.kode_mk, cpmk.urutan, cpmk.kode_cpmk`,
-      params,
-    )) as Array<{ id_cpmk:number; id_mata_kuliah:number; kode_cpmk:string; deskripsi_id:string; deskripsi_en:string|null; urutan:number; kode_mk:string; nama_mk:string; singkatan_mk:string|null }>;
+    const { data: rows, error } = await admin
+      .from('cpmk')
+      .select(
+        `id_cpmk, id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan,
+         mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan )`,
+      );
+    if (error) throw error;
 
-    const mkList = (await query(
-      `SELECT mk.id_mata_kuliah, mk.kode_mk, mk.nama_mk, mk.singkatan, mk.sks
-       FROM mata_kuliah mk
-       ORDER BY mk.kode_mk`,
-    )) as Array<{ id_mata_kuliah:number; kode_mk:string; nama_mk:string; singkatan:string|null; sks:number }>;
+    let cpmkList = (rows ?? []).map((r: any) => ({
+      id_cpmk: r.id_cpmk,
+      id_mata_kuliah: r.id_mata_kuliah,
+      kode_cpmk: r.kode_cpmk,
+      deskripsi_id: r.deskripsi_id,
+      deskripsi_en: r.deskripsi_en,
+      urutan: r.urutan,
+      kode_mk: r.mata_kuliah?.kode_mk,
+      nama_mk: r.mata_kuliah?.nama_mk,
+      singkatan_mk: r.mata_kuliah?.singkatan,
+    }));
+    if (idMk) cpmkList = cpmkList.filter((r) => r.id_mata_kuliah === Number(idMk));
+    if (kurMkIds) cpmkList = cpmkList.filter((r) => kurMkIds!.has(r.id_mata_kuliah));
+    cpmkList.sort((a, b) => (a.kode_mk ?? '').localeCompare(b.kode_mk ?? '') || a.urutan - b.urutan || a.kode_cpmk.localeCompare(b.kode_cpmk));
 
-    return NextResponse.json({ success: true, data: { cpmkList: rows, mkList } });
+    const { data: mkList, error: mkErr } = await admin
+      .from('mata_kuliah')
+      .select('id_mata_kuliah, kode_mk, nama_mk, singkatan, sks')
+      .order('kode_mk');
+    if (mkErr) throw mkErr;
+
+    return NextResponse.json({ success: true, data: { cpmkList, mkList } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[GET /api/admin/cpmk]', err);
@@ -65,17 +83,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Deskripsi (ID) wajib.' }, { status: 400 });
     }
 
-    const dup = (await query(`SELECT id_cpmk FROM cpmk WHERE id_mata_kuliah=? AND kode_cpmk=? LIMIT 1`, [id_mata_kuliah, kode_cpmk])) as Array<{id_cpmk:number}>;
-    if (dup.length) {
+    const admin = createSupabaseAdminClient();
+    const { data: dup } = await admin.from('cpmk').select('id_cpmk').eq('id_mata_kuliah', id_mata_kuliah).eq('kode_cpmk', kode_cpmk).maybeSingle();
+    if (dup) {
       return NextResponse.json({ success: false, error: 'DUPLICATE', message: `Kode CPMK '${kode_cpmk}' sudah ada di MK ini.` }, { status: 409 });
     }
 
-    const result = (await query(
-      `INSERT INTO cpmk (id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan) VALUES (?,?,?,?,?)`,
-      [id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan],
-    )) as unknown as { insertId: number };
+    const { data: ins, error: insErr } = await admin
+      .from('cpmk')
+      .insert({ id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan })
+      .select('id_cpmk')
+      .single();
+    if (insErr) throw insErr;
 
-    return NextResponse.json({ success: true, message: `CPMK ${kode_cpmk} berhasil ditambahkan.`, data: { id_cpmk: result.insertId } });
+    return NextResponse.json({ success: true, message: `CPMK ${kode_cpmk} berhasil ditambahkan.`, data: { id_cpmk: ins.id_cpmk } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[POST /api/admin/cpmk]', err);

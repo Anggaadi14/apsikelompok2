@@ -1,55 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
-type KelasRow = {
-  id_kelas: number;
-  kode_kelas: string | null;
-  tahun_akademik: string;
-  semester: string;
-  kuota: number | null;
-  id_mata_kuliah: number;
-  kode_mk: string;
-  nama_mk: string;
-  sks: number;
-  kode_kurikulum: string;
-  nama_kurikulum: string;
-  peran_di_kelas: 'koordinator' | 'anggota';
-  jumlah_mahasiswa: number;
-};
+const SEMESTER_ORDER: Record<string, number> = { Ganjil: 0, Genap: 1, Pendek: 2 };
 
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, ['dosen']);
     if (!user.id_staff) {
-      return NextResponse.json(
-        { success: false, error: 'INVALID_SESSION', message: 'Sesi dosen tidak memiliki id_staff.' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'INVALID_SESSION', message: 'Sesi dosen tidak memiliki id_staff.' }, { status: 401 });
     }
 
-    const rows = (await query(
-      `SELECT
-         k.id_kelas, k.kode_kelas, k.tahun_akademik, k.semester, k.kuota,
-         mk.id_mata_kuliah, mk.kode_mk, mk.nama_mk, mk.sks,
-         kur.kode AS kode_kurikulum, kur.nama AS nama_kurikulum,
-         mdk.peran_di_kelas,
-         (SELECT COUNT(*) FROM mahasiswa_kelas mks WHERE mks.id_kelas = k.id_kelas) AS jumlah_mahasiswa
-       FROM mapping_dosen_kelas mdk
-       JOIN kelas_mk k ON k.id_kelas = mdk.id_kelas
-       JOIN mata_kuliah mk ON mk.id_mata_kuliah = k.id_mata_kuliah
-       JOIN kurikulum kur ON kur.id_kurikulum = k.id_kurikulum
-       WHERE mdk.id_staff = ?
-       ORDER BY k.tahun_akademik DESC,
-                FIELD(k.semester, 'Ganjil', 'Genap', 'Pendek'),
-                mk.kode_mk`,
-      [user.id_staff],
-    )) as KelasRow[];
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from('mapping_dosen_kelas')
+      .select(
+        `peran_di_kelas,
+         kelas:id_kelas (
+           id_kelas, kode_kelas, tahun_akademik, semester, kuota,
+           mata_kuliah:id_mata_kuliah ( id_mata_kuliah, kode_mk, nama_mk, sks ),
+           kurikulum:id_kurikulum ( kode, nama )
+         )`,
+      )
+      .eq('id_staff', user.id_staff);
+    if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
-      data: { kelas: rows, total: rows.length },
-    });
+    const kelasIds = (data ?? []).map((r: any) => r.kelas?.id_kelas).filter(Boolean);
+    const mhsCounts = new Map<number, number>();
+    if (kelasIds.length) {
+      const { data: enr } = await admin.from('mahasiswa_kelas').select('id_kelas').in('id_kelas', kelasIds);
+      for (const e of enr ?? []) mhsCounts.set(e.id_kelas, (mhsCounts.get(e.id_kelas) ?? 0) + 1);
+    }
+
+    const rows = (data ?? [])
+      .filter((r: any) => r.kelas)
+      .map((r: any) => ({
+        id_kelas: r.kelas.id_kelas,
+        kode_kelas: r.kelas.kode_kelas,
+        tahun_akademik: r.kelas.tahun_akademik,
+        semester: r.kelas.semester,
+        kuota: r.kelas.kuota,
+        id_mata_kuliah: r.kelas.mata_kuliah?.id_mata_kuliah,
+        kode_mk: r.kelas.mata_kuliah?.kode_mk,
+        nama_mk: r.kelas.mata_kuliah?.nama_mk,
+        sks: r.kelas.mata_kuliah?.sks,
+        kode_kurikulum: r.kelas.kurikulum?.kode,
+        nama_kurikulum: r.kelas.kurikulum?.nama,
+        peran_di_kelas: r.peran_di_kelas,
+        jumlah_mahasiswa: mhsCounts.get(r.kelas.id_kelas) ?? 0,
+      }))
+      .sort((a: any, b: any) => b.tahun_akademik.localeCompare(a.tahun_akademik) || SEMESTER_ORDER[a.semester] - SEMESTER_ORDER[b.semester] || (a.kode_mk ?? '').localeCompare(b.kode_mk ?? ''));
+
+    return NextResponse.json({ success: true, data: { kelas: rows, total: rows.length } });
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;

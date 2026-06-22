@@ -7,9 +7,8 @@
 // - Fire-and-forget pattern: caller pakai `void notify... .catch(console.error)`.
 // - Debounce in-memory untuk edit per sel (mencegah spam).
 
-import { query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 import { sendEmail } from '@/app/lib/email';
-import type mysql from 'mysql2/promise';
 
 // ── Debounce state (in-memory, reset saat server restart) ─────────────────
 const DEBOUNCE_MS = 5 * 60 * 1000; // 5 menit
@@ -36,23 +35,21 @@ async function getKoPengampu(
   id_kelas: number,
   exclude_id_staff: number,
 ): Promise<KoPengampuRow[]> {
-  // Catatan: kalau kolom nama di tabel staff bukan "nama_lengkap",
-  // ganti `s.nama_lengkap AS nama` jadi `s.<kolom_aktual> AS nama`.
-  const [rows] = await query<mysql.RowDataPacket[]>(
-    `SELECT
-       s.id_staff,
-       s.nama_lengkap AS nama,
-       s.email,
-       mdk.peran_di_kelas
-     FROM mapping_dosen_kelas mdk
-     JOIN staff s ON s.id_staff = mdk.id_staff
-     WHERE mdk.id_kelas = ?
-       AND mdk.id_staff <> ?
-       AND s.email IS NOT NULL
-       AND s.email <> ''`,
-    [id_kelas, exclude_id_staff],
-  );
-  return rows as KoPengampuRow[];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from('mapping_dosen_kelas')
+    .select('id_staff, peran_di_kelas, staff:id_staff ( nama_lengkap, email_sso )')
+    .eq('id_kelas', id_kelas)
+    .neq('id_staff', exclude_id_staff);
+
+  return (data ?? [])
+    .filter((r: any) => r.staff?.email_sso)
+    .map((r: any) => ({
+      id_staff: r.id_staff,
+      nama: r.staff.nama_lengkap,
+      email: r.staff.email_sso,
+      peran_di_kelas: r.peran_di_kelas,
+    }));
 }
 
 // ── Internal: query meta kelas + editor ───────────────────────────────────
@@ -70,31 +67,31 @@ type EditorMeta = {
 };
 
 async function getKelasMeta(id_kelas: number): Promise<KelasMeta | null> {
-  const [rows] = await query<mysql.RowDataPacket[]>(
-    `SELECT
-       mk.kode_mk,
-       mk.nama_mk,
-       k.kode_kelas,
-       k.tahun_akademik,
-       k.semester
-     FROM kelas_mk k
-     JOIN mata_kuliah mk ON mk.id_mata_kuliah = k.id_mata_kuliah
-     WHERE k.id_kelas = ?
-     LIMIT 1`,
-    [id_kelas],
-  );
-  if (rows.length === 0) return null;
-  return rows[0] as KelasMeta;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from('kelas_mk')
+    .select('kode_kelas, tahun_akademik, semester, mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk )')
+    .eq('id_kelas', id_kelas)
+    .maybeSingle<{ kode_kelas: string | null; tahun_akademik: string; semester: string; mata_kuliah: { kode_mk: string; nama_mk: string } }>();
+  if (!data) return null;
+  return {
+    kode_mk: data.mata_kuliah.kode_mk,
+    nama_mk: data.mata_kuliah.nama_mk,
+    kode_kelas: data.kode_kelas,
+    tahun_akademik: data.tahun_akademik,
+    semester: data.semester,
+  };
 }
 
 async function getEditorMeta(id_staff: number): Promise<EditorMeta | null> {
-  const [rows] = await query<mysql.RowDataPacket[]>(
-    `SELECT nama_lengkap AS nama_editor, kode_dosen
-     FROM staff WHERE id_staff = ? LIMIT 1`,
-    [id_staff],
-  );
-  if (rows.length === 0) return null;
-  return rows[0] as EditorMeta;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from('staff')
+    .select('nama_lengkap, nip_nidn_nik')
+    .eq('id_staff', id_staff)
+    .maybeSingle<{ nama_lengkap: string; nip_nidn_nik: string }>();
+  if (!data) return null;
+  return { nama_editor: data.nama_lengkap, kode_dosen: data.nip_nidn_nik };
 }
 
 // ── HTML template builder ────────────────────────────────────────────────

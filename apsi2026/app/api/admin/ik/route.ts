@@ -1,54 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface IkRowOut {
-  id_ik: number;
-  id_cpl: number;
-  kode_ik: string;
-  deskripsi: string;
-  urutan: number;
-  kode_cpl: string;
-  singkatan_cpl: string;
-  id_kurikulum: number;
-  kode_kurikulum: string;
-}
 
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ['admin']);
     const url = new URL(req.url);
     const kur = url.searchParams.get('kur') || '';
-    const idCpl = url.searchParams.get('id_cpl');
+    const idCplFilter = url.searchParams.get('id_cpl');
 
-    const where: string[] = [];
-    const params: unknown[] = [];
-    if (kur) { where.push('(k.kode = ? OR k.id_kurikulum = ?)'); params.push(kur, Number(kur) || 0); }
-    if (idCpl) { where.push('ik.id_cpl = ?'); params.push(Number(idCpl)); }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const admin = createSupabaseAdminClient();
 
-    const rows = (await query(
-      `SELECT ik.id_ik, ik.id_cpl, ik.kode_ik, ik.deskripsi, ik.urutan,
-              c.kode_cpl, c.singkatan AS singkatan_cpl,
-              c.id_kurikulum, k.kode AS kode_kurikulum
-       FROM indikator_kinerja ik
-       JOIN cpl c ON c.id_cpl = ik.id_cpl
-       JOIN kurikulum k ON k.id_kurikulum = c.id_kurikulum
-       ${whereSql}
-       ORDER BY k.tahun_mulai DESC, c.urutan, c.kode_cpl, ik.urutan, ik.kode_ik`,
-      params,
-    )) as IkRowOut[];
+    const { data: rows, error } = await admin
+      .from('indikator_kinerja')
+      .select(
+        `id_ik, id_cpl, kode_ik, deskripsi, urutan,
+         cpl:id_cpl ( kode_cpl, singkatan, id_kurikulum,
+           kurikulum:id_kurikulum ( id_kurikulum, kode, tahun_mulai ) )`,
+      );
+    if (error) throw error;
 
-    const cplRows = (await query(
-      `SELECT c.id_cpl, c.id_kurikulum, c.kode_cpl, c.singkatan, c.domain, k.kode AS kode_kurikulum, k.is_active AS kurikulum_active
-       FROM cpl c JOIN kurikulum k ON k.id_kurikulum = c.id_kurikulum
-       ORDER BY k.tahun_mulai DESC, c.urutan, c.kode_cpl`,
-    )) as Array<{ id_cpl: number; id_kurikulum: number; kode_cpl: string; singkatan: string; domain: string; kode_kurikulum: string; kurikulum_active: number }>;
+    let ikList = (rows ?? []).map((r: any) => ({
+      id_ik: r.id_ik,
+      id_cpl: r.id_cpl,
+      kode_ik: r.kode_ik,
+      deskripsi: r.deskripsi,
+      urutan: r.urutan,
+      kode_cpl: r.cpl?.kode_cpl,
+      singkatan_cpl: r.cpl?.singkatan,
+      id_kurikulum: r.cpl?.id_kurikulum,
+      kode_kurikulum: r.cpl?.kurikulum?.kode,
+      _tahun: r.cpl?.kurikulum?.tahun_mulai ?? 0,
+    }));
 
-    return NextResponse.json({ success: true, data: { ikList: rows, cplList: cplRows } });
+    if (kur) {
+      ikList = ikList.filter((r) => r.kode_kurikulum === kur || String(r.id_kurikulum) === kur);
+    }
+    if (idCplFilter) {
+      ikList = ikList.filter((r) => r.id_cpl === Number(idCplFilter));
+    }
+    ikList.sort((a, b) => b._tahun - a._tahun || (a.kode_cpl ?? '').localeCompare(b.kode_cpl ?? '') || a.urutan - b.urutan || a.kode_ik.localeCompare(b.kode_ik));
+    const ikOut = ikList.map(({ _tahun, ...rest }) => rest);
+
+    const { data: cplRows, error: cplErr } = await admin
+      .from('cpl')
+      .select('id_cpl, id_kurikulum, kode_cpl, singkatan, domain, kurikulum:id_kurikulum ( kode, is_active, tahun_mulai )');
+    if (cplErr) throw cplErr;
+    const cplList = (cplRows ?? [])
+      .map((c: any) => ({
+        id_cpl: c.id_cpl,
+        id_kurikulum: c.id_kurikulum,
+        kode_cpl: c.kode_cpl,
+        singkatan: c.singkatan,
+        domain: c.domain,
+        kode_kurikulum: c.kurikulum?.kode,
+        kurikulum_active: c.kurikulum?.is_active,
+        _tahun: c.kurikulum?.tahun_mulai ?? 0,
+      }))
+      .sort((a, b) => b._tahun - a._tahun || (a.kode_cpl ?? '').localeCompare(b.kode_cpl ?? ''))
+      .map(({ _tahun, ...rest }) => rest);
+
+    return NextResponse.json({ success: true, data: { ikList: ikOut, cplList } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[GET /api/admin/ik]', err);
@@ -75,17 +90,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Deskripsi IK wajib diisi.' }, { status: 400 });
     }
 
-    const dup = (await query(`SELECT id_ik FROM indikator_kinerja WHERE id_cpl=? AND kode_ik=? LIMIT 1`, [id_cpl, kode_ik])) as Array<{id_ik:number}>;
-    if (dup.length) {
+    const admin = createSupabaseAdminClient();
+
+    const { data: dup } = await admin.from('indikator_kinerja').select('id_ik').eq('id_cpl', id_cpl).eq('kode_ik', kode_ik).maybeSingle();
+    if (dup) {
       return NextResponse.json({ success: false, error: 'DUPLICATE', message: `Kode IK '${kode_ik}' sudah ada di CPL ini.` }, { status: 409 });
     }
 
-    const result = (await query(
-      `INSERT INTO indikator_kinerja (id_cpl, kode_ik, deskripsi, urutan) VALUES (?,?,?,?)`,
-      [id_cpl, kode_ik, deskripsi, urutan],
-    )) as unknown as { insertId: number };
+    const { data: ins, error: insErr } = await admin
+      .from('indikator_kinerja')
+      .insert({ id_cpl, kode_ik, deskripsi, urutan })
+      .select('id_ik')
+      .single();
+    if (insErr) throw insErr;
 
-    return NextResponse.json({ success: true, message: `IK ${kode_ik} berhasil ditambahkan.`, data: { id_ik: result.insertId } });
+    return NextResponse.json({ success: true, message: `IK ${kode_ik} berhasil ditambahkan.`, data: { id_ik: ins.id_ik } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[POST /api/admin/ik]', err);

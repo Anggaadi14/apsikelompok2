@@ -16,7 +16,7 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 import { createClient } from '@supabase/supabase-js'
 
-const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+const admin = createClient<any>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
@@ -77,14 +77,15 @@ async function upsert<T extends Record<string, unknown>>(
   values: T,
   pk: string,
 ): Promise<number> {
-  const { data: existing } = await admin.from(table).select(pk).match(match).maybeSingle<Record<string, number>>()
-  if (existing) {
-    await admin.from(table).update(values).match(match)
-    return existing[pk]
+  const { data: existing } = await admin.from(table).select(pk).match(match as any).maybeSingle()
+  const existingRow = existing as Record<string, number> | null
+  if (existingRow) {
+    await admin.from(table).update(values as any).match(match as any)
+    return existingRow[pk]
   }
-  const { data: ins, error } = await admin.from(table).insert(values).select(pk).single()
+  const { data: ins, error } = await admin.from(table).insert(values as any).select(pk).single()
   if (error) throw error
-  return (ins as Record<string, number>)[pk]
+  return (ins as unknown as Record<string, number>)[pk]
 }
 
 async function main() {

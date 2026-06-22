@@ -15,13 +15,7 @@ import {
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
-  ReferenceLine,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
@@ -105,70 +99,6 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
       <h3 className="text-lg font-bold text-slate-800">
         Visualisasi Grafik CPL 1-10
       </h3>
-
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-        <h4 className="text-sm font-bold text-slate-700 mb-4">
-          Grafik Bar - Capaian CPL
-        </h4>
-
-        <div className="h-[350px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={cplData}
-              margin={{ top: 20, right: 20, left: 0, bottom: 5 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#f1f5f9"
-                vertical={false}
-              />
-
-              <XAxis
-                dataKey="name"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 11, fill: '#475569' }}
-              />
-
-              <YAxis
-                domain={[0, 100]}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 11, fill: '#475569' }}
-              />
-
-              <Tooltip
-                cursor={{ fill: 'rgba(99,102,241,0.06)' }}
-                contentStyle={{
-                  borderRadius: 8,
-                  border: '1px solid #e2e8f0',
-                  fontSize: 12,
-                }}
-              />
-
-              <ReferenceLine
-                y={80}
-                stroke="#ef4444"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                label={{
-                  value: 'Target 80',
-                  position: 'right',
-                  fill: '#ef4444',
-                  fontSize: 10,
-                }}
-              />
-
-              <Bar
-                dataKey="nilai"
-                fill="#6366f1"
-                radius={[4, 4, 0, 0]}
-                name="Nilai CPL"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <h4 className="text-sm font-bold text-slate-700 mb-4">

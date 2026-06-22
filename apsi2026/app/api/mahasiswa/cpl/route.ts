@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { handleAuthError, requireRole } from '@/app/lib/auth'
 import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 import { resolveKurikulumId } from '@/app/lib/kurikulum'
+import { nilaiKeHuruf } from '@/app/lib/grading'
 
 interface CpmkItem {
   kode: string
@@ -17,7 +18,8 @@ interface CpmkItem {
   bobot: number
   nilai: number
   matakuliah: string
-  nilaiMK: number
+  semester: number
+  nilaiMK: string
 }
 interface IkItem {
   kode: string
@@ -120,6 +122,12 @@ export async function GET(req: NextRequest) {
       ? await admin.from('v_nilai_cpmk_per_mhs').select('id_cpmk, nilai_cpmk').eq('id_mahasiswa', idMahasiswa).in('id_cpmk', cpmkIds)
       : { data: [] as { id_cpmk: number; nilai_cpmk: number }[] }
 
+    const idMataKuliahSet = new Set((cpmkRows ?? []).map((c: any) => c.cpmk.id_mata_kuliah as number))
+    const { data: semesterRows } = idMataKuliahSet.size
+      ? await admin.from('kurikulum_mk').select('id_mata_kuliah, semester_default').eq('id_kurikulum', idKurikulum).in('id_mata_kuliah', [...idMataKuliahSet])
+      : { data: [] as { id_mata_kuliah: number; semester_default: number | null }[] }
+    const semesterByMk = new Map((semesterRows ?? []).map((r) => [r.id_mata_kuliah, r.semester_default ?? 0]))
+
     // Retake-safe: rata-ratakan kalau ada >1 baris (beda kelas/semester) utk CPMK yang sama.
     const cpmkAgg = new Map<number, { sum: number; count: number }>()
     for (const r of nilaiCpmkRows ?? []) {
@@ -152,7 +160,8 @@ export async function GET(req: NextRequest) {
             bobot: Number(c.bobot_persen),
             nilai: Number(nilaiCpmk.toFixed(2)),
             matakuliah: `${c.cpmk.mata_kuliah.kode_mk} - ${c.cpmk.mata_kuliah.nama_mk}`,
-            nilaiMK: Number(nilaiCpmk.toFixed(2)),
+            semester: semesterByMk.get(c.cpmk.id_mata_kuliah) ?? 0,
+            nilaiMK: tertempuh ? nilaiKeHuruf(nilaiCpmk).huruf : '-',
           }
         })
         return {

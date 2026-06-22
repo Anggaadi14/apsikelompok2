@@ -1,74 +1,57 @@
-import { notifyKoPengampuOnEdit } from '@/app/lib/notifikasiPengampu';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query } from '@/app/lib/db';
-
-type NilaiRow = {
-  id_nilai: number;
-  id_mahasiswa: number;
-  nim: string;
-  nama_mahasiswa: string;
-  id_komponen: number;
-  kode_media: string;
-  nama_media: string;
-  nilai_asli: number | null;
-  nilai_remedi: number | null;
-  catatan: string | null;
-  diinput_at: string;
-  diupdate_at: string;
-};
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id_kelas: string }> }) {
   try {
     const user = await requireRole(req, ['dosen']);
     if (!user.id_staff) {
-      return NextResponse.json(
-        { success: false, error: 'INVALID_SESSION', message: 'Sesi dosen tidak memiliki id_staff.' },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: 'INVALID_SESSION', message: 'Sesi dosen tidak memiliki id_staff.' }, { status: 401 });
     }
 
     const { id_kelas } = await ctx.params;
     const idKelas = Number(id_kelas);
     if (!Number.isInteger(idKelas) || idKelas <= 0) {
-      return NextResponse.json(
-        { success: false, error: 'BAD_REQUEST', message: 'Parameter id_kelas tidak valid.' },
-        { status: 400 },
-      );
+      return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Parameter id_kelas tidak valid.' }, { status: 400 });
     }
 
-    // Verifikasi ownership
-    const ownership = (await query(
-      `SELECT 1 FROM mapping_dosen_kelas WHERE id_kelas = ? AND id_staff = ? LIMIT 1`,
-      [idKelas, user.id_staff],
-    )) as Array<unknown>;
-    if (ownership.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'FORBIDDEN', message: 'Anda tidak terdaftar sebagai pengampu kelas ini.' },
-        { status: 403 },
-      );
+    const admin = createSupabaseAdminClient();
+
+    const { data: ownership } = await admin.from('mapping_dosen_kelas').select('id_staff').eq('id_kelas', idKelas).eq('id_staff', user.id_staff).maybeSingle();
+    if (!ownership) {
+      return NextResponse.json({ success: false, error: 'FORBIDDEN', message: 'Anda tidak terdaftar sebagai pengampu kelas ini.' }, { status: 403 });
     }
 
-    // Join nilai_detail + mahasiswa + komponen
-    const rows = (await query(
-      `SELECT
-         nd.id_nilai, nd.id_mahasiswa, nd.id_komponen,
-         nd.nilai_asli, nd.nilai_remedi, nd.catatan,
-         nd.diinput_at, nd.diupdate_at,
-         m.nim, m.nama_mahasiswa,
-         kn.kode_media, kn.nama_media
-       FROM nilai_detail nd
-       JOIN mahasiswa m ON m.id_mahasiswa = nd.id_mahasiswa
-       JOIN komponen_nilai kn ON kn.id_komponen = nd.id_komponen
-       WHERE nd.id_kelas = ?
-       ORDER BY m.nim, kn.urutan, kn.kode_media`,
-      [idKelas],
-    )) as NilaiRow[];
+    const { data, error } = await admin
+      .from('nilai_detail')
+      .select(
+        `id_nilai, id_mahasiswa, id_komponen, nilai_asli, nilai_remedi, catatan, diinput_at, diupdate_at,
+         mahasiswa:id_mahasiswa ( nim, nama_mahasiswa ),
+         komponen_nilai:id_komponen ( kode_media, nama_media, urutan )`,
+      )
+      .eq('id_kelas', idKelas);
+    if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
-      data: { nilai: rows, total: rows.length },
-    });
+    const rows = (data ?? [])
+      .map((r: any) => ({
+        id_nilai: r.id_nilai,
+        id_mahasiswa: r.id_mahasiswa,
+        id_komponen: r.id_komponen,
+        nilai_asli: r.nilai_asli,
+        nilai_remedi: r.nilai_remedi,
+        catatan: r.catatan,
+        diinput_at: r.diinput_at,
+        diupdate_at: r.diupdate_at,
+        nim: r.mahasiswa?.nim,
+        nama_mahasiswa: r.mahasiswa?.nama_mahasiswa,
+        kode_media: r.komponen_nilai?.kode_media,
+        nama_media: r.komponen_nilai?.nama_media,
+        _urutan: r.komponen_nilai?.urutan ?? 0,
+      }))
+      .sort((a: any, b: any) => (a.nim ?? '').localeCompare(b.nim ?? '') || a._urutan - b._urutan || (a.kode_media ?? '').localeCompare(b.kode_media ?? ''))
+      .map(({ _urutan, ...rest }: any) => rest);
+
+    return NextResponse.json({ success: true, data: { nilai: rows, total: rows.length } });
   } catch (err) {
     const authResp = handleAuthError(err);
     if (authResp) return authResp;

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { getConnection, query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 import { generateRandomPassword } from '@/app/lib/passwordGen';
 
 /* ============================================================
@@ -28,7 +27,7 @@ export interface UserRow {
   id_staff: number | null;
   nama_input: string | null;
   nama_resolved: string;
-  identifier: string | null; // NIM atau NIP/NIDN/NIK
+  identifier: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,18 +35,33 @@ export interface UserRow {
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ['admin']);
-    const rows = (await query(
-      `SELECT
-         u.id_user, u.email, u.role, u.status, u.force_password_change,
-         u.id_mahasiswa, u.id_staff, u.nama_input,
-         u.created_at, u.updated_at,
-         COALESCE(m.nama_mahasiswa, s.nama_lengkap, u.nama_input, u.email) AS nama_resolved,
-         COALESCE(m.nim, s.nip_nidn_nik)                                   AS identifier
-       FROM user u
-       LEFT JOIN mahasiswa m ON u.id_mahasiswa = m.id_mahasiswa
-       LEFT JOIN staff     s ON u.id_staff     = s.id_staff
-       ORDER BY u.created_at DESC, u.id_user DESC`,
-    )) as UserRow[];
+    const admin = createSupabaseAdminClient();
+
+    const { data, error } = await admin
+      .from('app_user')
+      .select(
+        `id_user, email, role, status, force_password_change, id_mahasiswa, id_staff, nama_input, created_at, updated_at,
+         mahasiswa:id_mahasiswa ( nama_mahasiswa, nim ),
+         staff:id_staff ( nama_lengkap, nip_nidn_nik )`,
+      )
+      .order('created_at', { ascending: false })
+      .order('id_user', { ascending: false });
+    if (error) throw error;
+
+    const rows: UserRow[] = (data ?? []).map((u: any) => ({
+      id_user: u.id_user,
+      email: u.email,
+      role: u.role,
+      status: u.status,
+      force_password_change: u.force_password_change ? 1 : 0,
+      id_mahasiswa: u.id_mahasiswa,
+      id_staff: u.id_staff,
+      nama_input: u.nama_input,
+      nama_resolved: u.mahasiswa?.nama_mahasiswa || u.staff?.nama_lengkap || u.nama_input || u.email,
+      identifier: u.mahasiswa?.nim || u.staff?.nip_nidn_nik || null,
+      created_at: u.created_at,
+      updated_at: u.updated_at,
+    }));
 
     return NextResponse.json({ success: true, data: rows });
   } catch (err) {
@@ -64,9 +78,8 @@ export async function POST(req: NextRequest) {
 
     const role = String(body.role || '').trim() as Role;
     const email = String(body.email || '').trim().toLowerCase();
-    const nama  = String(body.nama  || '').trim();
-    const linkage_mode = (body.linkage_mode === 'existing' ? 'existing' : 'create_new') as
-      'existing' | 'create_new';
+    const nama = String(body.nama || '').trim();
+    const linkage_mode = (body.linkage_mode === 'existing' ? 'existing' : 'create_new') as 'existing' | 'create_new';
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return NextResponse.json({ success: false, message: 'Email tidak valid.' }, { status: 400 });
@@ -75,107 +88,93 @@ export async function POST(req: NextRequest) {
     if (!['mahasiswa', 'dosen', 'kaprodi', 'jamu', 'admin'].includes(role))
       return NextResponse.json({ success: false, message: 'Role tidak valid.' }, { status: 400 });
 
-    // Cek email unik di user
-    const dup = (await query(
-      `SELECT id_user FROM user WHERE email = ? LIMIT 1`,
-      [email],
-    )) as Array<{ id_user: number }>;
-    if (dup.length)
-      return NextResponse.json({ success: false, message: 'Email sudah terdaftar.' }, { status: 409 });
+    const admin = createSupabaseAdminClient();
 
-    const conn = await getConnection();
+    const { data: dup } = await admin.from('app_user').select('id_user').eq('email', email).maybeSingle();
+    if (dup) return NextResponse.json({ success: false, message: 'Email sudah terdaftar.' }, { status: 409 });
+
+    let id_mahasiswa: number | null = null;
+    let id_staff: number | null = null;
+
     try {
-      await conn.beginTransaction();
-
-      let id_mahasiswa: number | null = null;
-      let id_staff: number | null = null;
-
       if (role === 'mahasiswa') {
         if (linkage_mode === 'existing') {
           const idIn = Number(body.id_mahasiswa);
-          if (!Number.isFinite(idIn) || idIn <= 0)
-            throw new Error('id_mahasiswa wajib untuk linkage existing.');
-          const [chk] = (await conn.query(
-            `SELECT id_mahasiswa FROM mahasiswa WHERE id_mahasiswa = ? LIMIT 1`,
-            [idIn],
-          )) as [Array<{ id_mahasiswa: number }>, unknown];
-          if (!chk.length) throw new Error('Mahasiswa tidak ditemukan.');
+          if (!Number.isFinite(idIn) || idIn <= 0) throw new Error('id_mahasiswa wajib untuk linkage existing.');
+          const { data: chk } = await admin.from('mahasiswa').select('id_mahasiswa').eq('id_mahasiswa', idIn).maybeSingle();
+          if (!chk) throw new Error('Mahasiswa tidak ditemukan.');
           id_mahasiswa = idIn;
         } else {
           const nim = String(body.nim || '').trim();
           const angkatan = Number(body.angkatan);
-          if (!nim || !/^[A-Za-z0-9_-]{4,15}$/.test(nim))
-            throw new Error('NIM wajib (4-15 char alfanumerik).');
-          if (!Number.isFinite(angkatan) || angkatan < 1990 || angkatan > 2100)
-            throw new Error('Angkatan tidak valid.');
-          const [ins] = (await conn.query(
-            `INSERT INTO mahasiswa (nim, nama_mahasiswa, email_sso, angkatan)
-             VALUES (?, ?, ?, ?)`,
-            [nim, nama, email, angkatan],
-          )) as [{ insertId: number }, unknown];
-          id_mahasiswa = ins.insertId;
+          if (!nim || !/^[A-Za-z0-9_-]{4,15}$/.test(nim)) throw new Error('NIM wajib (4-15 char alfanumerik).');
+          if (!Number.isFinite(angkatan) || angkatan < 1990 || angkatan > 2100) throw new Error('Angkatan tidak valid.');
+          const { data: ins, error: insErr } = await admin
+            .from('mahasiswa')
+            .insert({ nim, nama_mahasiswa: nama, email_sso: email, angkatan })
+            .select('id_mahasiswa')
+            .single();
+          if (insErr) throw new Error(insErr.message);
+          id_mahasiswa = ins.id_mahasiswa;
         }
       } else {
-        // Role: dosen / kaprodi / jamu / admin -> linkage ke staff
         if (linkage_mode === 'existing') {
           const idIn = Number(body.id_staff);
-          if (!Number.isFinite(idIn) || idIn <= 0)
-            throw new Error('id_staff wajib untuk linkage existing.');
-          const [chk] = (await conn.query(
-            `SELECT id_staff FROM staff WHERE id_staff = ? LIMIT 1`,
-            [idIn],
-          )) as [Array<{ id_staff: number }>, unknown];
-          if (!chk.length) throw new Error('Staff tidak ditemukan.');
+          if (!Number.isFinite(idIn) || idIn <= 0) throw new Error('id_staff wajib untuk linkage existing.');
+          const { data: chk } = await admin.from('staff').select('id_staff').eq('id_staff', idIn).maybeSingle();
+          if (!chk) throw new Error('Staff tidak ditemukan.');
           id_staff = idIn;
         } else {
           const nip = String(body.nip_nidn_nik || '').trim();
-          if (!nip || nip.length < 4 || nip.length > 20)
-            throw new Error('NIP/NIDN/NIK wajib (4-20 char).');
-          const peran = role === 'admin' ? 'admin'
-                      : role === 'kaprodi' ? 'kaprodi'
-                      : role === 'jamu' ? 'jamu' : 'dosen';
-          const [ins] = (await conn.query(
-            `INSERT INTO staff (nip_nidn_nik, nama_lengkap, email_sso, peran)
-             VALUES (?, ?, ?, ?)`,
-            [nip, nama, email, peran],
-          )) as [{ insertId: number }, unknown];
-          id_staff = ins.insertId;
+          if (!nip || nip.length < 4 || nip.length > 20) throw new Error('NIP/NIDN/NIK wajib (4-20 char).');
+          const peran = role === 'admin' ? 'admin' : role === 'kaprodi' ? 'kaprodi' : role === 'jamu' ? 'jamu' : 'dosen';
+          const { data: ins, error: insErr } = await admin
+            .from('staff')
+            .insert({ nip_nidn_nik: nip, nama_lengkap: nama, email_sso: email, peran })
+            .select('id_staff')
+            .single();
+          if (insErr) throw new Error(insErr.message);
+          id_staff = ins.id_staff;
         }
       }
 
       const plainPassword = generateRandomPassword(10);
-      const hash = await bcrypt.hash(plainPassword, 10);
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({ email, password: plainPassword, email_confirm: true });
+      if (createErr || !created?.user) throw new Error(createErr?.message || 'Gagal membuat akun Supabase Auth.');
 
-      const [ins] = (await conn.query(
-        `INSERT INTO user (email, sandi_hash, role, status, force_password_change,
-                           id_mahasiswa, id_staff, nama_input, verified_at)
-         VALUES (?, ?, ?, 'aktif', 1, ?, ?, ?, NOW())`,
-        [email, hash, role, id_mahasiswa, id_staff, nama],
-      )) as [{ insertId: number }, unknown];
-
-      await conn.commit();
+      const { data: insUser, error: insUserErr } = await admin
+        .from('app_user')
+        .insert({
+          auth_user_id: created.user.id,
+          email,
+          role,
+          status: 'aktif',
+          force_password_change: true,
+          id_mahasiswa,
+          id_staff,
+          nama_input: nama,
+          verified_at: new Date().toISOString(),
+        })
+        .select('id_user')
+        .single();
+      if (insUserErr) throw new Error(insUserErr.message);
 
       return NextResponse.json({
         success: true,
         data: {
-          id_user: ins.insertId,
+          id_user: insUser.id_user,
           email,
           role,
           nama,
           id_mahasiswa,
           id_staff,
-          // PLAINTEXT password dikembalikan SEKALI biar admin bisa kasih ke user.
-          // Setelah ini tidak akan pernah bisa dilihat lagi.
           generated_password: plainPassword,
           force_password_change: 1,
         },
       });
     } catch (e) {
-      await conn.rollback();
       const msg = e instanceof Error ? e.message : 'Gagal membuat user.';
       return NextResponse.json({ success: false, message: msg }, { status: 400 });
-    } finally {
-      conn.release();
     }
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;

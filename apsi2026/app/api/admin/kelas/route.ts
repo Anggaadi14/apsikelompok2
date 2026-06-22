@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query, getConnection } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 
 /* ============================================================
    /api/admin/kelas
@@ -10,41 +10,65 @@ import { query, getConnection } from '@/app/lib/db';
              dari tabel tahun_akademik untuk kompatibel kolom lama.
    ============================================================ */
 
+const SEMESTER_ORDER: Record<string, number> = { Ganjil: 0, Genap: 1, Pendek: 2 };
+
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ['admin']);
+    const admin = createSupabaseAdminClient();
 
-    const [items, dosenList, mkList, kurikulumList, taList] = await Promise.all([
-      query(
-        `SELECT k.id_kelas, k.kode_kelas, k.kuota,
-                k.tahun_akademik AS ta_legacy, k.semester AS sem_legacy,
-                k.id_tahun_akademik,
-                ta.kode AS ta_kode, ta.label AS ta_label, ta.is_active AS ta_is_active,
-                ta.semester AS ta_semester,
-                mk.id_mata_kuliah, mk.kode_mk, mk.nama_mk, mk.sks,
-                kur.id_kurikulum, kur.kode AS kode_kurikulum, kur.nama AS nama_kurikulum,
-                (SELECT COUNT(*) FROM mapping_dosen_kelas md WHERE md.id_kelas = k.id_kelas) AS jml_dosen,
-                (SELECT COUNT(*) FROM mahasiswa_kelas mk2 WHERE mk2.id_kelas = k.id_kelas) AS jml_mahasiswa
-         FROM kelas_mk k
-         JOIN mata_kuliah mk ON mk.id_mata_kuliah = k.id_mata_kuliah
-         JOIN kurikulum kur ON kur.id_kurikulum = k.id_kurikulum
-         LEFT JOIN tahun_akademik ta ON ta.id_tahun_akademik = k.id_tahun_akademik
-         ORDER BY COALESCE(ta.tahun_mulai, 0) DESC,
-                  FIELD(COALESCE(ta.semester, k.semester),'Ganjil','Genap','Pendek'),
-                  mk.kode_mk, k.kode_kelas`,
-      ),
-      query(
-        `SELECT id_staff, nama_lengkap, email_sso, nip_nidn_nik, peran
-         FROM staff WHERE peran IN ('dosen','kaprodi') ORDER BY nama_lengkap`,
-      ),
-      query(`SELECT id_mata_kuliah, kode_mk, nama_mk, sks FROM mata_kuliah ORDER BY kode_mk`),
-      query(`SELECT id_kurikulum, kode, nama, is_active FROM kurikulum ORDER BY tahun_mulai DESC`),
-      query(
-        `SELECT id_tahun_akademik, kode, tahun_mulai, tahun_selesai, semester, label, is_active
-         FROM tahun_akademik
-         ORDER BY tahun_mulai DESC, FIELD(semester,'Ganjil','Genap','Pendek')`,
-      ),
+    const [{ data: kelasRows, error: kelasErr }, { data: dosenList }, { data: mkList }, { data: kurikulumList }, { data: taList }] = await Promise.all([
+      admin
+        .from('kelas_mk')
+        .select(
+          `id_kelas, kode_kelas, kuota, tahun_akademik, semester, id_tahun_akademik,
+           tahun_akademik_ref:id_tahun_akademik ( kode, label, is_active, semester, tahun_mulai ),
+           mata_kuliah:id_mata_kuliah ( id_mata_kuliah, kode_mk, nama_mk, sks ),
+           kurikulum:id_kurikulum ( id_kurikulum, kode, nama )`,
+        ),
+      admin.from('staff').select('id_staff, nama_lengkap, email_sso, nip_nidn_nik, peran').in('peran', ['dosen', 'kaprodi']).order('nama_lengkap'),
+      admin.from('mata_kuliah').select('id_mata_kuliah, kode_mk, nama_mk, sks').order('kode_mk'),
+      admin.from('kurikulum').select('id_kurikulum, kode, nama, is_active').order('tahun_mulai', { ascending: false }),
+      admin.from('tahun_akademik').select('id_tahun_akademik, kode, tahun_mulai, tahun_selesai, semester, label, is_active'),
     ]);
+    if (kelasErr) throw kelasErr;
+
+    const kelasIds = (kelasRows ?? []).map((k: any) => k.id_kelas);
+    const dosenCounts = new Map<number, number>();
+    const mhsCounts = new Map<number, number>();
+    if (kelasIds.length) {
+      const { data: md } = await admin.from('mapping_dosen_kelas').select('id_kelas').in('id_kelas', kelasIds);
+      for (const r of md ?? []) dosenCounts.set(r.id_kelas, (dosenCounts.get(r.id_kelas) ?? 0) + 1);
+      const { data: mk2 } = await admin.from('mahasiswa_kelas').select('id_kelas').in('id_kelas', kelasIds);
+      for (const r of mk2 ?? []) mhsCounts.set(r.id_kelas, (mhsCounts.get(r.id_kelas) ?? 0) + 1);
+    }
+
+    const items = (kelasRows ?? [])
+      .map((k: any) => ({
+        id_kelas: k.id_kelas,
+        kode_kelas: k.kode_kelas,
+        kuota: k.kuota,
+        ta_legacy: k.tahun_akademik,
+        sem_legacy: k.semester,
+        id_tahun_akademik: k.id_tahun_akademik,
+        ta_kode: k.tahun_akademik_ref?.kode ?? null,
+        ta_label: k.tahun_akademik_ref?.label ?? null,
+        ta_is_active: k.tahun_akademik_ref?.is_active ?? null,
+        ta_semester: k.tahun_akademik_ref?.semester ?? null,
+        id_mata_kuliah: k.mata_kuliah?.id_mata_kuliah,
+        kode_mk: k.mata_kuliah?.kode_mk,
+        nama_mk: k.mata_kuliah?.nama_mk,
+        sks: k.mata_kuliah?.sks,
+        id_kurikulum: k.kurikulum?.id_kurikulum,
+        kode_kurikulum: k.kurikulum?.kode,
+        nama_kurikulum: k.kurikulum?.nama,
+        jml_dosen: dosenCounts.get(k.id_kelas) ?? 0,
+        jml_mahasiswa: mhsCounts.get(k.id_kelas) ?? 0,
+        _tahun: k.tahun_akademik_ref?.tahun_mulai ?? 0,
+        _sem: SEMESTER_ORDER[k.tahun_akademik_ref?.semester ?? k.semester] ?? 0,
+      }))
+      .sort((a: any, b: any) => b._tahun - a._tahun || a._sem - b._sem || (a.kode_mk ?? '').localeCompare(b.kode_mk ?? '') || (a.kode_kelas ?? '').localeCompare(b.kode_kelas ?? ''))
+      .map(({ _tahun, _sem, ...rest }: any) => rest);
 
     return NextResponse.json({
       success: true,
@@ -75,44 +99,28 @@ export async function POST(req: NextRequest) {
     if (kode_kelas.length > 5) return bad('Kode kelas maksimal 5 karakter.');
     if (kuota !== null && (!Number.isFinite(kuota) || kuota < 0)) return bad('Kuota tidak valid.');
 
-    const taRows = (await query(
-      `SELECT tahun_mulai, tahun_selesai, semester FROM tahun_akademik WHERE id_tahun_akademik = ? LIMIT 1`,
-      [id_tahun_akademik],
-    )) as Array<{ tahun_mulai: number; tahun_selesai: number; semester: 'Ganjil'|'Genap'|'Pendek' }>;
-    if (taRows.length === 0) return bad('Tahun Akademik tidak ditemukan.');
-    const ta = taRows[0];
-    if (ta.semester === 'Pendek')
-      return bad('Tahun Akademik berjenis "Pendek" belum didukung untuk kelas tayang.');
+    const admin = createSupabaseAdminClient();
+
+    const { data: ta } = await admin.from('tahun_akademik').select('tahun_mulai, tahun_selesai, semester').eq('id_tahun_akademik', id_tahun_akademik).maybeSingle();
+    if (!ta) return bad('Tahun Akademik tidak ditemukan.');
+    if (ta.semester === 'Pendek') return bad('Tahun Akademik berjenis "Pendek" belum didukung untuk kelas tayang.');
     const ta_string = `${ta.tahun_mulai}/${ta.tahun_selesai}`;
 
-    const linked = (await query(
-      `SELECT 1 FROM kurikulum_mk WHERE id_kurikulum = ? AND id_mata_kuliah = ? LIMIT 1`,
-      [id_kurikulum, id_mata_kuliah],
-    )) as Array<unknown>;
-    if (linked.length === 0)
-      return bad('Mata Kuliah ini belum terhubung ke Kurikulum yang dipilih.');
+    const { data: linked } = await admin.from('kurikulum_mk').select('id_kurikulum').eq('id_kurikulum', id_kurikulum).eq('id_mata_kuliah', id_mata_kuliah).maybeSingle();
+    if (!linked) return bad('Mata Kuliah ini belum terhubung ke Kurikulum yang dipilih.');
 
-    const conn = await getConnection();
-    try {
-      await conn.beginTransaction();
-      const [ins] = await conn.query(
-        `INSERT INTO kelas_mk
-           (id_mata_kuliah, id_kurikulum, tahun_akademik, semester, kode_kelas, kuota, id_tahun_akademik)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id_mata_kuliah, id_kurikulum, ta_string, ta.semester, kode_kelas, kuota, id_tahun_akademik],
-      );
-      await conn.commit();
-      const id_kelas = (ins as { insertId: number }).insertId;
-      return NextResponse.json({ success: true, data: { id_kelas } });
-    } catch (e) {
-      await conn.rollback();
-      const msg = e instanceof Error ? e.message : '';
-      if (msg.includes('uq_kelas') || msg.includes('Duplicate'))
-        return NextResponse.json(
-          { success: false, error: 'DUPLICATE', message: 'Kombinasi MK + TA + Semester + Kode Kelas sudah ada.' },
-          { status: 409 });
-      throw e;
-    } finally { conn.release(); }
+    const { data: ins, error: insErr } = await admin
+      .from('kelas_mk')
+      .insert({ id_mata_kuliah, id_kurikulum, tahun_akademik: ta_string, semester: ta.semester, kode_kelas, kuota, id_tahun_akademik })
+      .select('id_kelas')
+      .single();
+    if (insErr) {
+      if (insErr.code === '23505') {
+        return NextResponse.json({ success: false, error: 'DUPLICATE', message: 'Kombinasi MK + TA + Semester + Kode Kelas sudah ada.' }, { status: 409 });
+      }
+      throw insErr;
+    }
+    return NextResponse.json({ success: true, data: { id_kelas: ins.id_kelas } });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
     console.error('[POST /api/admin/kelas]', err);

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { requireRole, handleAuthError, serverError } from '@/app/lib/auth';
-import { query } from '@/app/lib/db';
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin';
 import { generateRandomPassword } from '@/app/lib/passwordGen';
 
 /* ============================================================
@@ -21,24 +20,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!Number.isFinite(idUser) || idUser <= 0)
       return NextResponse.json({ success: false, message: 'ID tidak valid.' }, { status: 400 });
 
-    const rows = (await query(
-      `SELECT id_user, email FROM user WHERE id_user = ? LIMIT 1`,
-      [idUser],
-    )) as Array<{ id_user: number; email: string }>;
-    if (!rows.length)
+    const admin = createSupabaseAdminClient();
+    const { data: user } = await admin.from('app_user').select('id_user, auth_user_id, email').eq('id_user', idUser).maybeSingle();
+    if (!user)
       return NextResponse.json({ success: false, message: 'User tidak ditemukan.' }, { status: 404 });
 
     const plain = generateRandomPassword(10);
-    const hash = await bcrypt.hash(plain, 10);
+    const { error: authErr } = await admin.auth.admin.updateUserById(user.auth_user_id, { password: plain });
+    if (authErr) throw authErr;
 
-    await query(
-      `UPDATE user SET sandi_hash = ?, force_password_change = 1 WHERE id_user = ?`,
-      [hash, idUser],
-    );
+    await admin.from('app_user').update({ force_password_change: true }).eq('id_user', idUser);
 
     return NextResponse.json({
       success: true,
-      data: { id_user: idUser, email: rows[0].email, generated_password: plain },
+      data: { id_user: idUser, email: user.email, generated_password: plain },
     });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;
