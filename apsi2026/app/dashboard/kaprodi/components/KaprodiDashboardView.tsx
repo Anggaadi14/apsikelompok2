@@ -8,14 +8,20 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
   Cell,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts';
 
 interface KaprodiDashboardViewProps {
@@ -60,7 +66,6 @@ function authHeaders(): Record<string, string> {
 export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardViewProps) {
   const [filterTahun, setFilterTahun] = useState('Semua');
   const [filterSemester, setFilterSemester] = useState('Semua');
-  const [filterKurikulum, setFilterKurikulum] = useState('Semua');
   const [filterAngkatan, setFilterAngkatan] = useState('Semua');
   const [filterKelas, setFilterKelas] = useState('Semua');
   const [filterCPL, setFilterCPL] = useState('Semua');
@@ -74,7 +79,6 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
     const params = new URLSearchParams();
     if (filterTahun !== 'Semua') params.set('ta', filterTahun);
     if (filterSemester !== 'Semua') params.set('sem', filterSemester);
-    if (filterKurikulum !== 'Semua') params.set('kur', filterKurikulum);
     if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
     if (filterKelas !== 'Semua') params.set('kelas', filterKelas);
     if (filterCPL !== 'Semua') params.set('cpl', filterCPL);
@@ -98,7 +102,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterKelas, filterCPL]);
+  }, [filterTahun, filterSemester, filterAngkatan, filterKelas, filterCPL]);
 
   const stats = useMemo(() => {
     const s = data?.stats;
@@ -149,6 +153,12 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
   const targetRealisasiCPL = data?.targetRealisasiCPL ?? [];
   const criticalCpl = data?.criticalCpl ?? [];
   const criticalIk = data?.criticalIk ?? [];
+  const radarData = targetRealisasiCPL.map((cpl) => ({
+    subject: cpl.id,
+    realisasi: cpl.realisasi,
+    target: cpl.target,
+    name: cpl.name,
+  }));
 
   const handleDownloadPdf = async () => {
     setIsDownloadOpen(false);
@@ -175,7 +185,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
     );
 
     doc.setFontSize(9);
-    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Kurikulum: ${filterKurikulum}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  Kelas: ${filterKelas}`;
+    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  Kelas: ${filterKelas}`;
     doc.text(doc.splitTextToSize(`Filter: ${filterLine}`, 180), marginX, 37);
 
     doc.setFontSize(10);
@@ -309,10 +319,9 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
           <Filter className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-700">Filter Analisis OBE</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={data?.options.tahun ?? []} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={data?.options.semester ?? []} />
-          <FilterSelect label="Kurikulum" value={filterKurikulum} onChange={setFilterKurikulum} options={data?.options.kurikulum ?? []} />
           <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={data?.options.angkatan ?? []} />
           <FilterSelect label="CPL" value={filterCPL} onChange={setFilterCPL} options={data?.options.cpl ?? []} />
           <FilterSelect label="Kelas" value={filterKelas} onChange={setFilterKelas} options={data?.options.kelas ?? []} />
@@ -401,13 +410,40 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Grafik Radar Capaian CPL</h2>
+            <p className="text-xs text-gray-500 mb-4">Visualisasi realisasi dan target CPL 1-10 program studi.</p>
+
+            <div className="h-[400px] w-full flex justify-center">
+              {radarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                    <PolarGrid stroke="#e2e8f0" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#475569' }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <Radar name="Realisasi" dataKey="realisasi" stroke="#6366f1" fill="#6366f1" fillOpacity={0.45} />
+                    <Radar name="Target" dataKey="target" stroke="#ef4444" fill="#ef4444" fillOpacity={0.12} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelFormatter={(label) => radarData.find((c) => c.subject === label)?.name ?? label}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500">Belum ada data CPL untuk filter ini.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">Target vs Realisasi CPL (Tahun Ajar {filterTahun})</h2>
 
           <div className="h-[320px] w-full">
             {targetRealisasiCPL.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={targetRealisasiCPL} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <ComposedChart data={targetRealisasiCPL} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="id" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                   <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
@@ -422,12 +458,22 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
                       <Cell key={i} fill={cpl.realisasi < cpl.target ? '#f43f5e' : '#10b981'} />
                     ))}
                   </Bar>
-                  <Bar dataKey="target" name="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Line
+                    type="monotone"
+                    dataKey="target"
+                    name="Target"
+                    stroke="#64748b"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
+                    activeDot={{ r: 4 }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-sm text-gray-500">Belum ada data CPL untuk filter ini.</div>
             )}
+          </div>
           </div>
         </div>
       </div>

@@ -26,8 +26,10 @@ type Summary = {
 };
 type Option = { value: string; label: string };
 type FilterOptions = {
-  angkatan: string[];
+  tahun: string[];
   semester: string[];
+  angkatan: string[];
+  cpl: Option[];
   kelas: Option[];
 };
 
@@ -38,12 +40,14 @@ function authHeaders(): Record<string, string> {
 
 export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterAngkatan, setFilterAngkatan] = useState('Semua');
+  const [filterTahun, setFilterTahun] = useState('Semua');
   const [filterSemester, setFilterSemester] = useState('Semua');
+  const [filterAngkatan, setFilterAngkatan] = useState('Semua');
+  const [filterCpl, setFilterCpl] = useState('Semua');
   const [filterKelas, setFilterKelas] = useState('Semua');
   const [mahasiswaList, setMahasiswaList] = useState<MahasiswaRow[]>([]);
   const [summary, setSummary] = useState<Summary>({ total: 0, rata_cpl: null, rata_semester: null });
-  const [options, setOptions] = useState<FilterOptions>({ angkatan: [], semester: [], kelas: [] });
+  const [options, setOptions] = useState<FilterOptions>({ tahun: [], semester: [], angkatan: [], cpl: [], kelas: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -52,8 +56,10 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
     const timer = setTimeout(() => {
       const params = new URLSearchParams();
       if (searchTerm.trim()) params.set('q', searchTerm.trim());
-      if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
+      if (filterTahun !== 'Semua') params.set('ta', filterTahun);
       if (filterSemester !== 'Semua') params.set('semester', filterSemester);
+      if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
+      if (filterCpl !== 'Semua') params.set('cpl', filterCpl);
       if (filterKelas !== 'Semua') params.set('kelas', filterKelas);
 
       setLoading(true);
@@ -68,7 +74,7 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
           if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat mahasiswa.');
           setMahasiswaList(json.data.items ?? []);
           setSummary(json.data.summary ?? { total: 0, rata_cpl: null, rata_semester: null });
-          setOptions(json.data.options ?? { angkatan: [], semester: [], kelas: [] });
+          setOptions(json.data.options ?? { tahun: [], semester: [], angkatan: [], cpl: [], kelas: [] });
         })
         .catch((err) => {
           if (err.name !== 'AbortError') setError(err.message || 'Gagal memuat mahasiswa.');
@@ -80,7 +86,7 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [searchTerm, filterAngkatan, filterSemester, filterKelas]);
+  }, [searchTerm, filterTahun, filterSemester, filterAngkatan, filterCpl, filterKelas]);
 
   return (
     <div className="space-y-6">
@@ -94,9 +100,11 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
           <Filter className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-700">Filter Data Mahasiswa</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={options.angkatan} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={options.tahun} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={options.semester} />
+          <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={options.angkatan} />
+          <FilterSelect label="CPL" value={filterCpl} onChange={setFilterCpl} options={options.cpl} />
           <FilterSelect label="Kelas" value={filterKelas} onChange={setFilterKelas} options={options.kelas} />
         </div>
       </div>

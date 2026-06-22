@@ -64,6 +64,27 @@ function kodeCplLabel(kode: string) {
   return kode.toUpperCase().startsWith('CPL') ? kode : `CPL-${kode}`
 }
 
+function cplNumber(label: string) {
+  const match = label.match(/\d+/)
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+function padCplChartRows(rows: Array<{ id: string; name: string; target: number; realisasi: number; deskripsi: string }>) {
+  const byNumber = new Map(rows.map((row) => [cplNumber(row.id), row]))
+  const defaultTarget = rows[0]?.target ?? 80
+
+  return Array.from({ length: 10 }, (_, idx) => {
+    const no = idx + 1
+    return byNumber.get(no) ?? {
+      id: `CPL-${no}`,
+      name: `CPL ${no}`,
+      target: defaultTarget,
+      realisasi: 0,
+      deskripsi: 'Data CPL belum tersedia.',
+    }
+  })
+}
+
 export async function getObeDashboardData(admin: AdminClient, filter: ObeFilter) {
   const idKurikulum = await resolveDashboardKurikulum(admin, filter.kur)
 
@@ -131,7 +152,7 @@ export async function getObeDashboardData(admin: AdminClient, filter: ObeFilter)
     cplAgg.set(row.id_cpl, cur)
   }
 
-  const targetRealisasiCPL = cpls.map((c) => {
+  const actualTargetRealisasiCPL = cpls.map((c) => {
     const agg = cplAgg.get(c.id_cpl)
     return {
       id: kodeCplLabel(c.kode_cpl),
@@ -141,12 +162,15 @@ export async function getObeDashboardData(admin: AdminClient, filter: ObeFilter)
       deskripsi: c.deskripsi_id,
     }
   })
+  const targetRealisasiCPL = isAll(filter.cpl)
+    ? padCplChartRows(actualTargetRealisasiCPL)
+    : actualTargetRealisasiCPL
 
-  const avgCpl = targetRealisasiCPL.length
-    ? targetRealisasiCPL.reduce((acc, c) => acc + c.realisasi, 0) / targetRealisasiCPL.length
+  const avgCpl = actualTargetRealisasiCPL.length
+    ? actualTargetRealisasiCPL.reduce((acc, c) => acc + c.realisasi, 0) / actualTargetRealisasiCPL.length
     : 0
-  const cplTercapai = targetRealisasiCPL.filter((c) => c.realisasi >= c.target && c.realisasi > 0)
-  const cplBelum = targetRealisasiCPL.filter((c) => c.realisasi < c.target)
+  const cplTercapai = actualTargetRealisasiCPL.filter((c) => c.realisasi >= c.target && c.realisasi > 0)
+  const cplBelum = actualTargetRealisasiCPL.filter((c) => c.realisasi < c.target)
   const criticalCpl = cplBelum.slice(0, 5)
 
   const { data: ikRows } = cplIds.length
@@ -203,7 +227,7 @@ export async function getObeDashboardData(admin: AdminClient, filter: ObeFilter)
     stats: {
       rata_cpl: pct(avgCpl),
       cpl_tercapai: cplTercapai.length,
-      cpl_total: targetRealisasiCPL.length,
+      cpl_total: actualTargetRealisasiCPL.length,
       cpl_belum: cplBelum.length,
       cpl_belum_label: cplBelum.slice(0, 3).map((c) => c.id).join(', ') || '-',
       ik_bermasalah: criticalIk.length,

@@ -5,6 +5,7 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -106,7 +107,14 @@ export default function DashboardView({ cplData, setActiveTab }: DashboardViewPr
                   fontWeight: 'bold',
                 }}
               />
-              <Bar dataKey="nilai" fill="#6366f1" radius={[4, 4, 0, 0]} name="Nilai CPL" />
+              <Bar dataKey="nilai" radius={[4, 4, 0, 0]} name="Nilai CPL">
+                {cplData.map((cpl) => (
+                  <Cell
+                    key={cpl.name}
+                    fill={cpl.nilai <= 0 ? '#94a3b8' : cpl.nilai < cpl.target ? '#f43f5e' : '#10b981'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

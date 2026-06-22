@@ -11,8 +11,10 @@ export async function GET(req: NextRequest) {
     const admin = createSupabaseAdminClient()
     const url = new URL(req.url)
     const q = (url.searchParams.get('q') ?? '').trim().toLowerCase()
+    const filterTahun = (url.searchParams.get('ta') ?? 'Semua').trim()
     const filterAngkatan = (url.searchParams.get('angkatan') ?? 'Semua').trim()
     const filterSemester = (url.searchParams.get('semester') ?? 'Semua').trim()
+    const filterCpl = (url.searchParams.get('cpl') ?? 'Semua').trim()
     const filterKelas = (url.searchParams.get('kelas') ?? 'Semua').trim()
 
     const { data: mahasiswa, error } = await admin
@@ -24,7 +26,6 @@ export async function GET(req: NextRequest) {
 
     const ids = (mahasiswa ?? []).map((m) => m.id_mahasiswa)
     type KelasMahasiswaRow = { id_mahasiswa: number; id_kelas: number }
-    type NilaiCplRow = { id_mahasiswa: number; nilai_cpl: number | string | null }
     type KelasOptionRow = {
       id_kelas: number
       kode_kelas: string
@@ -32,24 +33,43 @@ export async function GET(req: NextRequest) {
       semester: string
       mata_kuliah: { kode_mk: string | null; nama_mk: string | null } | Array<{ kode_mk: string | null; nama_mk: string | null }> | null
     }
-
-    const [{ data: kelasRows }, { data: nilaiCplRows }, { data: kelasOptionsRows }] = await Promise.all([
+    type CplOptionRow = { id_cpl: number; kode_cpl: string; singkatan: string | null; urutan: number | null }
+    const [{ data: kelasRows }, { data: kelasOptionsRows }, { data: cplOptionRows }] = await Promise.all([
       ids.length
         ? admin.from('mahasiswa_kelas').select('id_mahasiswa, id_kelas').in('id_mahasiswa', ids)
         : Promise.resolve({ data: [] as KelasMahasiswaRow[] }),
-      ids.length
-        ? admin.from('v_nilai_cpl_per_mhs').select('id_mahasiswa, nilai_cpl').in('id_mahasiswa', ids)
-        : Promise.resolve({ data: [] as NilaiCplRow[] }),
       admin
         .from('kelas_mk')
         .select('id_kelas, kode_kelas, tahun_akademik, semester, mata_kuliah:id_mata_kuliah(kode_mk, nama_mk)')
         .order('tahun_akademik', { ascending: false })
         .order('kode_kelas'),
+      admin.from('cpl').select('id_cpl, kode_cpl, singkatan, urutan').order('urutan'),
     ])
+    const typedKelasOptions = (kelasOptionsRows ?? []) as unknown as KelasOptionRow[]
+    const selectedKelasId = filterKelas === 'Semua' ? null : Number(filterKelas)
+    const selectedKelas = selectedKelasId == null ? null : typedKelasOptions.find((k) => k.id_kelas === selectedKelasId)
+    const effectiveTahun = selectedKelas?.tahun_akademik ?? filterTahun
+    const effectiveSemester = selectedKelas?.semester ?? filterSemester
+    const filteredKelasIds = new Set(
+      typedKelasOptions
+        .filter((k) => effectiveTahun === 'Semua' || k.tahun_akademik === effectiveTahun)
+        .filter((k) => effectiveSemester === 'Semua' || k.semester === effectiveSemester)
+        .map((k) => k.id_kelas),
+    )
+    const academicMembers = new Set(
+      effectiveTahun !== 'Semua' || effectiveSemester !== 'Semua'
+        ? (kelasRows ?? []).filter((row) => filteredKelasIds.has(row.id_kelas)).map((row) => row.id_mahasiswa)
+        : [],
+    )
+
+    let nilaiCplQuery = admin.from('v_nilai_cpl_per_mhs').select('id_mahasiswa, id_cpl, nilai_cpl')
+    if (ids.length) nilaiCplQuery = nilaiCplQuery.in('id_mahasiswa', ids)
+    else nilaiCplQuery = nilaiCplQuery.eq('id_mahasiswa', -1)
+    if (filterCpl !== 'Semua') nilaiCplQuery = nilaiCplQuery.eq('id_cpl', Number(filterCpl))
+    const { data: nilaiCplRows } = await nilaiCplQuery
 
     const kelasCount = new Map<number, number>()
     for (const row of kelasRows ?? []) kelasCount.set(row.id_mahasiswa, (kelasCount.get(row.id_mahasiswa) ?? 0) + 1)
-    const selectedKelasId = filterKelas === 'Semua' ? null : Number(filterKelas)
     const selectedKelasMembers = new Set(
       selectedKelasId
         ? (kelasRows ?? []).filter((row) => row.id_kelas === selectedKelasId).map((row) => row.id_mahasiswa)
@@ -84,7 +104,8 @@ export async function GET(req: NextRequest) {
       })
       .filter((m) => !q || m.nama.toLowerCase().includes(q) || m.nim.toLowerCase().includes(q))
       .filter((m) => filterAngkatan === 'Semua' || String(m.angkatan ?? '') === filterAngkatan)
-      .filter((m) => filterSemester === 'Semua' || String(m.semester ?? '') === filterSemester)
+      .filter((m) => effectiveSemester === 'Semua' || String(m.semester ?? '') === effectiveSemester)
+      .filter((m) => (effectiveTahun === 'Semua' && effectiveSemester === 'Semua') || academicMembers.has(m.id_mahasiswa))
       .filter((m) => selectedKelasId == null || selectedKelasMembers.has(m.id_mahasiswa))
 
     const withCpl = items.filter((m) => m.cpl != null)
@@ -95,18 +116,18 @@ export async function GET(req: NextRequest) {
       rata_semester: withSemester.length ? Number((withSemester.reduce((sum, m) => sum + (m.semester ?? 0), 0) / withSemester.length).toFixed(1)) : null,
     }
 
-    const allSemester = Array.from(
-      new Set(
-        (mahasiswa ?? [])
-          .map((m) => (m.angkatan ? Math.max(1, (nowYear - Number(m.angkatan)) * 2 + 1) : null))
-          .filter((semester): semester is number => semester != null),
-      ),
-    ).sort((a, b) => a - b)
-
     const options = {
+      tahun: Array.from(new Set(typedKelasOptions.map((k) => k.tahun_akademik).filter(Boolean))).sort().reverse(),
+      semester: Array.from(new Set(typedKelasOptions.map((k) => k.semester).filter(Boolean))),
       angkatan: Array.from(new Set((mahasiswa ?? []).map((m) => m.angkatan).filter(Boolean))).sort((a, b) => Number(b) - Number(a)).map(String),
-      semester: allSemester.map(String),
-      kelas: ((kelasOptionsRows ?? []) as unknown as KelasOptionRow[]).map((k) => {
+      cpl: ((cplOptionRows ?? []) as CplOptionRow[]).map((cpl) => ({
+        value: String(cpl.id_cpl),
+        label: `${cpl.kode_cpl.toUpperCase().startsWith('CPL') ? cpl.kode_cpl : `CPL-${cpl.kode_cpl}`} - ${cpl.singkatan ?? ''}`.trim(),
+      })),
+      kelas: typedKelasOptions
+        .filter((k) => effectiveTahun === 'Semua' || k.tahun_akademik === effectiveTahun)
+        .filter((k) => effectiveSemester === 'Semua' || k.semester === effectiveSemester)
+        .map((k) => {
         const mk = Array.isArray(k.mata_kuliah) ? k.mata_kuliah[0] : k.mata_kuliah
         return {
           value: String(k.id_kelas),

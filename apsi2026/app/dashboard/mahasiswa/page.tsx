@@ -39,6 +39,8 @@ interface ProfileData {
   prodi: string;
 }
 
+type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
+
 // ─────────────────────────────────────────────
 // Komponen loading
 // ─────────────────────────────────────────────
@@ -104,6 +106,7 @@ export default function MahasiswaDashboard() {
       if (userObj.role !== 'mahasiswa') {
         router.push(`/dashboard/${userObj.role}`);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSessionUser(userObj);
       }
     } catch {
@@ -204,7 +207,6 @@ export default function MahasiswaDashboard() {
 
     const displayName  = profile?.nama_mahasiswa ?? sessionUser?.name ?? '-';
     const displayNim   = profile?.nim             ?? sessionUser?.identifier ?? '-';
-    const displayIpk   = profile?.ipk             ?? 0;
     const displayProdi = profile?.prodi           ?? 'Teknik Industri UNS';
 
     const tercapaiCount = cplData.filter((c) => c.status === 'Tercapai').length;
@@ -237,7 +239,7 @@ export default function MahasiswaDashboard() {
       `Mahasiswa      : ${displayName}`,
       `NIM            : ${displayNim}`,
       `Program Studi  : ${displayProdi}`,
-      `IPK Kumulatif  : ${displayIpk}`,
+      `Rata-rata CPL  : ${avgCpl}`,
       `Semester Aktif : ${selectedSemester}`,
     ];
     profileLines.forEach((line, i) => doc.text(line, marginX, 38 + i * 5.5));
@@ -266,7 +268,7 @@ export default function MahasiswaDashboard() {
       columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 16 }, 4: { cellWidth: 14 }, 5: { cellWidth: 14 } },
     });
 
-    let cursorY = (doc as any).lastAutoTable.finalY + 10;
+    let cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 73) + 10;
 
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
@@ -315,7 +317,7 @@ export default function MahasiswaDashboard() {
         headStyles: { fillColor: [99, 102, 241] },
         columnStyles: { 3: { cellWidth: 10 }, 4: { cellWidth: 14 } },
       });
-      cursorY = (doc as any).lastAutoTable.finalY + 8;
+      cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? cursorY) + 8;
     }
 
     doc.save(`Laporan_CPL_${displayNim}_${String(displayName).replace(/\s+/g, '_')}.pdf`);
@@ -329,6 +331,11 @@ export default function MahasiswaDashboard() {
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (!sessionUser) return <LoadingSpinner />;
+
+  const nilaiCplValid = cplData.filter((c) => c.nilai > 0);
+  const rataCpl = nilaiCplValid.length > 0
+    ? nilaiCplValid.reduce((sum, cpl) => sum + cpl.nilai, 0) / nilaiCplValid.length
+    : 0;
 
   // Profile yang diteruskan ke CplView (Report tab) — fallback aman ke session
   const cplProfile = {
@@ -383,7 +390,7 @@ export default function MahasiswaDashboard() {
             nim={profile?.nim             ?? sessionUser.identifier}
             angkatan={profile?.angkatan   ?? 0}
             semester={profile?.semester_aktif ?? 0}
-            ipk={profile?.ipk             ?? 0}
+            rataCpl={rataCpl}
             onDownloadReport={handleDownloadReport}
           />
 

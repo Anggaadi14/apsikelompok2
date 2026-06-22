@@ -75,7 +75,7 @@ export default function DosenDashboardView({ sessionUser }: DosenDashboardViewPr
       borderColor: 'border-green-200',
     },
     {
-      label: 'Mata Kuliah Unik',
+      label: 'Mata Kuliah non Pengajaran',
       value: String(stats.totalMKUnik),
       icon: <FileText className="w-6 h-6" />,
       color: 'bg-purple-50 text-purple-600',

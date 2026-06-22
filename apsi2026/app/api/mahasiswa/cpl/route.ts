@@ -44,6 +44,46 @@ interface CplDataItem {
   kategori: string
 }
 
+function kodeCplLabel(kode: string) {
+  return kode.toUpperCase().startsWith('CPL') ? kode : `CPL-${kode}`
+}
+
+function cplNumber(label: string) {
+  const match = label.match(/\d+/)
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+function padMahasiswaCplData(cplData: CplDataItem[], detailCpl: DetailCplItem[]) {
+  const defaultTarget = cplData[0]?.target ?? 80
+  const cplByNumber = new Map(cplData.map((cpl) => [cplNumber(cpl.name), cpl]))
+  const detailByNumber = new Map(detailCpl.map((detail) => [cplNumber(detail.cpl), detail]))
+
+  const paddedCplData = Array.from({ length: 10 }, (_, idx) => {
+    const no = idx + 1
+    return cplByNumber.get(no) ?? {
+      name: `CPL-${no}`,
+      nilai: 0,
+      target: defaultTarget,
+      status: 'Belum Ditempuh' as const,
+      kategori: '-',
+    }
+  })
+
+  const paddedDetailCpl = Array.from({ length: 10 }, (_, idx) => {
+    const no = idx + 1
+    return detailByNumber.get(no) ?? {
+      cpl: `CPL-${no}`,
+      deskripsi: 'Data CPL belum tersedia.',
+      nilai: 0,
+      target: defaultTarget,
+      status: 'Belum Ditempuh' as const,
+      ik: [],
+    }
+  })
+
+  return { cplData: paddedCplData, detailCpl: paddedDetailCpl }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireRole(req, ['mahasiswa'])
@@ -104,25 +144,26 @@ export async function GET(req: NextRequest) {
              cpmk:id_cpmk ( kode_cpmk, deskripsi_id, id_mata_kuliah, mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk ) )`,
           )
           .in('id_ik', ikIds)
-      : { data: [] as any[] }
+      : { data: [] as CpmkRow[] }
     type CpmkRow = {
       id_cpmk: number
       id_ik: number
       bobot_persen: number
       cpmk: { kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; mata_kuliah: { kode_mk: string; nama_mk: string } }
     }
+    const typedCpmkRows = (cpmkRows ?? []) as unknown as CpmkRow[]
     const cpmkByIk = new Map<number, CpmkRow[]>()
-    for (const c of (cpmkRows ?? []) as unknown as CpmkRow[]) {
+    for (const c of typedCpmkRows) {
       if (!cpmkByIk.has(c.id_ik)) cpmkByIk.set(c.id_ik, [])
       cpmkByIk.get(c.id_ik)!.push(c)
     }
-    const cpmkIds = (cpmkRows ?? []).map((r) => r.id_cpmk)
+    const cpmkIds = typedCpmkRows.map((r) => r.id_cpmk)
 
     const { data: nilaiCpmkRows } = cpmkIds.length
       ? await admin.from('v_nilai_cpmk_per_mhs').select('id_cpmk, nilai_cpmk').eq('id_mahasiswa', idMahasiswa).in('id_cpmk', cpmkIds)
       : { data: [] as { id_cpmk: number; nilai_cpmk: number }[] }
 
-    const idMataKuliahSet = new Set((cpmkRows ?? []).map((c: any) => c.cpmk.id_mata_kuliah as number))
+    const idMataKuliahSet = new Set(typedCpmkRows.map((c) => c.cpmk.id_mata_kuliah))
     const { data: semesterRows } = idMataKuliahSet.size
       ? await admin.from('kurikulum_mk').select('id_mata_kuliah, semester_default').eq('id_kurikulum', idKurikulum).in('id_mata_kuliah', [...idMataKuliahSet])
       : { data: [] as { id_mata_kuliah: number; semester_default: number | null }[] }
@@ -180,14 +221,14 @@ export async function GET(req: NextRequest) {
           : 'Belum Tercapai'
 
       cplData.push({
-        name: cpl.kode_cpl,
+        name: kodeCplLabel(cpl.kode_cpl),
         nilai: Number(nilaiCpl.toFixed(2)),
         target: targetCpl,
         status,
         kategori: cpl.domain,
       })
       detailCpl.push({
-        cpl: cpl.kode_cpl,
+        cpl: kodeCplLabel(cpl.kode_cpl),
         deskripsi: cpl.deskripsi_id,
         nilai: Number(nilaiCpl.toFixed(2)),
         target: targetCpl,
@@ -196,7 +237,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ success: true, data: { cplData, detailCpl } })
+    return NextResponse.json({ success: true, data: padMahasiswaCplData(cplData, detailCpl) })
   } catch (err) {
     const authRes = handleAuthError(err)
     if (authRes) return authRes

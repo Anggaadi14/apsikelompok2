@@ -42,7 +42,6 @@ function authHeaders(): Record<string, string> {
 export default function JamuDashboardView() {
   const [filterTahun, setFilterTahun] = useState('Semua');
   const [filterSemester, setFilterSemester] = useState('Semua');
-  const [filterKurikulum, setFilterKurikulum] = useState('Semua');
   const [filterAngkatan, setFilterAngkatan] = useState('Semua');
   const [filterCPL, setFilterCPL] = useState('Semua');
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -55,7 +54,6 @@ export default function JamuDashboardView() {
     const params = new URLSearchParams();
     if (filterTahun !== 'Semua') params.set('ta', filterTahun);
     if (filterSemester !== 'Semua') params.set('sem', filterSemester);
-    if (filterKurikulum !== 'Semua') params.set('kur', filterKurikulum);
     if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
     if (filterCPL !== 'Semua') params.set('cpl', filterCPL);
 
@@ -78,7 +76,7 @@ export default function JamuDashboardView() {
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterCPL]);
+  }, [filterTahun, filterSemester, filterAngkatan, filterCPL]);
 
   const stats = useMemo(() => [
     {
@@ -163,10 +161,9 @@ export default function JamuDashboardView() {
           <Filter className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-700">Filter Analisis Mutu</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={data?.options.tahun ?? []} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={data?.options.semester ?? []} />
-          <FilterSelect label="Kurikulum" value={filterKurikulum} onChange={setFilterKurikulum} options={data?.options.kurikulum ?? []} />
           <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={data?.options.angkatan ?? []} />
           <FilterSelect label="CPL" value={filterCPL} onChange={setFilterCPL} options={data?.options.cpl ?? []} />
         </div>
@@ -277,7 +274,7 @@ export default function JamuDashboardView() {
                   </div>
 
                   <div className="relative w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="absolute top-0 bottom-0 w-1 bg-gray-800 z-10" style={{ left: `${Math.min(cpl.target, 100)}%` }} />
+                    <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-800 z-10" style={{ left: `${Math.min(cpl.target, 100)}%` }} />
                     <div
                       className={`absolute top-0 bottom-0 left-0 transition-all duration-1000 ${isWarning ? 'bg-rose-500' : 'bg-emerald-500'}`}
                       style={{ width: `${Math.min(cpl.realisasi, 100)}%` }}

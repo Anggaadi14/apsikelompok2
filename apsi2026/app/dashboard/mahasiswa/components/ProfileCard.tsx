@@ -7,7 +7,7 @@ interface ProfileCardProps {
   nim: string;
   angkatan: number;
   semester: number;
-  ipk: number;
+  rataCpl: number;
   onDownloadReport?: () => void;
 }
 
@@ -16,7 +16,7 @@ export default function ProfileCard({
   nim,
   angkatan,
   semester,
-  ipk,
+  rataCpl,
   onDownloadReport,
 }: ProfileCardProps) {
   return (
@@ -40,8 +40,8 @@ export default function ProfileCard({
         </div>
         <div className="flex sm:flex-col items-baseline sm:items-end justify-between sm:justify-start gap-4">
           <div className="text-left sm:text-right">
-            <p className="text-xs text-indigo-200 uppercase tracking-wider font-bold">IPK Kumulatif</p>
-            <p className="text-4xl font-extrabold tracking-tight mt-0.5">{ipk.toFixed(2)}</p>
+            <p className="text-xs text-indigo-200 uppercase tracking-wider font-bold">Rata-rata CPL</p>
+            <p className="text-4xl font-extrabold tracking-tight mt-0.5">{rataCpl.toFixed(1)}</p>
           </div>
           {onDownloadReport && (
             <button
