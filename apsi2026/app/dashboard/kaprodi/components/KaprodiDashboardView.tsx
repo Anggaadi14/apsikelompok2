@@ -151,6 +151,123 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
   const criticalCpl = data?.criticalCpl ?? [];
   const criticalIk = data?.criticalIk ?? [];
 
+  const handleDownloadPdf = async () => {
+    setIsDownloadOpen(false);
+    if (!data) return;
+
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 14;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SICPL - Portal Kaprodi', marginX, 16);
+    doc.setFontSize(11);
+    doc.text('Laporan Monitoring OBE Program Studi', marginX, 23);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(
+      `Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+      marginX,
+      29,
+    );
+
+    doc.setFontSize(9);
+    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Kurikulum: ${filterKurikulum}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  MK: ${filterMK}  ·  Kelas: ${filterKelas}`;
+    doc.text(doc.splitTextToSize(`Filter: ${filterLine}`, 180), marginX, 37);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      doc.splitTextToSize(
+        `Rata-rata CPL: ${data.stats.rata_cpl}   ·   Tercapai: ${data.stats.cpl_tercapai}/${data.stats.cpl_total}   ·   Belum Tercapai: ${data.stats.cpl_belum}   ·   IK Bermasalah: ${data.stats.ik_bermasalah}   ·   MK Belum Upload: ${data.stats.mk_belum_upload}`,
+        180,
+      ),
+      marginX,
+      50,
+    );
+    doc.setFont('helvetica', 'normal');
+
+    autoTable(doc, {
+      startY: 58,
+      margin: { left: marginX, right: marginX },
+      head: [['CPL', 'Nama', 'Target', 'Realisasi', 'Status']],
+      body: targetRealisasiCPL.map((c) => [
+        c.id,
+        c.name,
+        c.target,
+        c.realisasi,
+        c.realisasi >= c.target ? 'Tercapai' : 'Belum Tercapai',
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [79, 70, 229] },
+    });
+
+    let cursorY = (doc as any).lastAutoTable.finalY + 10;
+    if (cursorY > pageHeight - 40) {
+      doc.addPage();
+      cursorY = 16;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CPL & IK Kritis', marginX, cursorY);
+    doc.setFont('helvetica', 'normal');
+    cursorY += 5;
+
+    const criticalRows = [
+      ...criticalCpl.map((c) => [c.id, c.deskripsi || c.name, c.realisasi, c.target]),
+      ...criticalIk.map((ik) => [ik.kode, ik.deskripsi, ik.nilai, ik.target]),
+    ];
+
+    if (criticalRows.length > 0) {
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [['Kode', 'Deskripsi', 'Nilai', 'Target']],
+        body: criticalRows,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [225, 29, 72] },
+      });
+      cursorY = (doc as any).lastAutoTable.finalY + 10;
+    } else {
+      doc.setFontSize(9);
+      doc.text('Tidak ada CPL/IK kritis pada filter ini.', marginX, cursorY);
+      cursorY += 10;
+    }
+
+    if (cursorY > pageHeight - 40) {
+      doc.addPage();
+      cursorY = 16;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Status Data Belum Lengkap', marginX, cursorY);
+    doc.setFont('helvetica', 'normal');
+    cursorY += 5;
+
+    const incomplete = data.incompleteClasses ?? [];
+    if (incomplete.length > 0) {
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [['Mata Kuliah / Kelas', 'Status']],
+        body: incomplete.map((k) => [k.label, k.status]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [100, 116, 139] },
+      });
+    } else {
+      doc.setFontSize(9);
+      doc.text('Semua kelas pada filter ini sudah punya upload nilai sukses.', marginX, cursorY);
+    }
+
+    doc.save(`Laporan_OBE_Kaprodi_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -170,7 +287,11 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
 
           {isDownloadOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10">
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+              <button
+                onClick={handleDownloadPdf}
+                disabled={!data}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
                 <FileText className="w-4 h-4 text-red-500" /> Export PDF
               </button>
               <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
@@ -232,9 +353,8 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
                 <div className="space-y-3">
                   {criticalCpl.slice(0, 4).map((item) => (
                     <div key={item.id} className="bg-white p-3 rounded border border-rose-100 shadow-sm">
-                      <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.id}</span>
-                        <span className="text-xs font-semibold text-rose-600">{item.realisasi}% / {item.target}%</span>
                       </div>
                       <p className="text-xs text-gray-500">{item.deskripsi || item.name || 'Perlu evaluasi lanjutan.'}</p>
                     </div>
@@ -250,9 +370,8 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
                 <div className="space-y-3">
                   {criticalIk.slice(0, 4).map((item) => (
                     <div key={item.kode} className="bg-white p-3 rounded border border-amber-100 shadow-sm">
-                      <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.kode}</span>
-                        <span className="text-xs font-semibold text-amber-600">{item.nilai}% / {item.target}%</span>
                       </div>
                       <p className="text-xs text-gray-500">{item.deskripsi || 'Perlu evaluasi lanjutan.'}</p>
                     </div>

@@ -207,9 +207,8 @@ export default function JamuDashboardView() {
                 <div className="space-y-3">
                   {criticalCpl.slice(0, 4).map((item) => (
                     <div key={item.id} className="bg-white p-3 rounded border border-rose-100 shadow-sm">
-                      <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.id}</span>
-                        <span className="text-xs font-semibold text-rose-600">{item.realisasi}% / {item.target}%</span>
                       </div>
                       <p className="text-xs text-gray-500">{item.deskripsi || item.name || 'Perlu validasi mutu lanjutan.'}</p>
                     </div>
@@ -225,9 +224,8 @@ export default function JamuDashboardView() {
                 <div className="space-y-3">
                   {criticalIk.slice(0, 4).map((item) => (
                     <div key={item.kode} className="bg-white p-3 rounded border border-amber-100 shadow-sm">
-                      <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.kode}</span>
-                        <span className="text-xs font-semibold text-amber-600">{item.nilai}% / {item.target}%</span>
                       </div>
                       <p className="text-xs text-gray-500">{item.deskripsi || 'Perlu validasi mutu lanjutan.'}</p>
                     </div>
