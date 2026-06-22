@@ -19,18 +19,20 @@ async function resolveEmail(identifier: string): Promise<string | null> {
 
   const admin = createSupabaseAdminClient()
 
-  const { data: mhs } = await admin
+  const { data: mhs, error: mhsErr } = await admin
     .from('mahasiswa')
     .select('email_sso')
     .eq('nim', identifier)
     .maybeSingle<{ email_sso: string }>()
+  if (mhsErr) console.error('[POST /api/auth/login] resolveEmail mahasiswa lookup failed (check SUPABASE_SERVICE_ROLE_KEY):', mhsErr)
   if (mhs) return mhs.email_sso
 
-  const { data: stf } = await admin
+  const { data: stf, error: stfErr } = await admin
     .from('staff')
     .select('email_sso')
     .eq('nip_nidn_nik', identifier)
     .maybeSingle<{ email_sso: string }>()
+  if (stfErr) console.error('[POST /api/auth/login] resolveEmail staff lookup failed (check SUPABASE_SERVICE_ROLE_KEY):', stfErr)
   if (stf) return stf.email_sso
 
   return null
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = createSupabaseAdminClient()
-    const { data: profile } = await admin
+    const { data: profile, error: profileErr } = await admin
       .from('app_user')
       .select(
         `id_user, role, status, force_password_change, id_mahasiswa, id_staff, nama_input,
@@ -78,6 +80,19 @@ export async function POST(req: NextRequest) {
       )
       .eq('auth_user_id', signInData.user.id)
       .maybeSingle<ProfileRow>()
+
+    if (profileErr) {
+      // Most common cause: SUPABASE_SERVICE_ROLE_KEY misconfigured/truncated
+      // in this environment — the admin client can't read app_user even
+      // though auth.users sign-in just succeeded. Surface it loudly instead
+      // of falling through to a misleading "not registered" message.
+      console.error('[POST /api/auth/login] app_user lookup failed (check SUPABASE_SERVICE_ROLE_KEY):', profileErr)
+      await supabase.auth.signOut()
+      return NextResponse.json(
+        { success: false, error: 'SERVER_ERROR', message: `Gagal memuat profil user: ${profileErr.message}` },
+        { status: 500 },
+      )
+    }
 
     if (!profile) {
       await supabase.auth.signOut()

@@ -120,28 +120,38 @@ export async function proxy(request: NextRequest) {
   // ── 1. Refresh Supabase session cookie ────────────────────────────────
   let response = NextResponse.next({ request })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          )
-        },
-      },
-    },
-  )
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Do not add logic between createServerClient and getUser() — this call
-  // is what actually refreshes the token if it's expired.
-  await supabase.auth.getUser()
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // proxy runs on every request — never let a missing/misconfigured env
+    // var take the entire site down. Log loudly and just skip the session
+    // refresh; individual routes will still 401 properly via getSessionUser.
+    console.error('[proxy] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set.')
+  } else {
+    try {
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+            response = NextResponse.next({ request })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options),
+            )
+          },
+        },
+      })
+
+      // Do not add logic between createServerClient and getUser() — this
+      // call is what actually refreshes the token if it's expired.
+      await supabase.auth.getUser()
+    } catch (err) {
+      console.error('[proxy] Supabase session refresh failed:', err)
+    }
+  }
 
   // ── 2. IP whitelist ────────────────────────────────────────────────────
   if (BYPASS) return response
