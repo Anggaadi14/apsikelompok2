@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { BarChart3 } from 'lucide-react';
+import { Users, BarChart3 } from 'lucide-react';
 import KaprodiDashboardView from './components/KaprodiDashboardView';
+import MahasiswaListView from './components/MahasiswaListView';
 
 export default function KaprodiDashboard() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'mahasiswa'>('dashboard');
   const [sessionUser, setSessionUser] = useState<UserSession | null>(null);
 
   // Auth Guard check
@@ -35,6 +37,7 @@ export default function KaprodiDashboard() {
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-5 h-5" /> },
+    { id: 'mahasiswa', label: 'Data Mahasiswa', icon: <Users className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {
@@ -67,13 +70,14 @@ export default function KaprodiDashboard() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           items={sidebarItems}
-          activeTab="dashboard"
-          setActiveTab={() => {}}
+          activeTab={activeTab}
+          setActiveTab={(id: string) => setActiveTab(id as typeof activeTab)}
         />
 
         <main className="flex-1 overflow-auto">
           <div className="p-8">
-            <KaprodiDashboardView sessionUser={sessionUser} />
+            {activeTab === 'dashboard' && <KaprodiDashboardView sessionUser={sessionUser} />}
+            {activeTab === 'mahasiswa' && <MahasiswaListView sessionUser={sessionUser} />}
           </div>
         </main>
       </div>

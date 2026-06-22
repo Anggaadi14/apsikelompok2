@@ -44,7 +44,6 @@ export default function JamuDashboardView() {
   const [filterSemester, setFilterSemester] = useState('Semua');
   const [filterKurikulum, setFilterKurikulum] = useState('Semua');
   const [filterAngkatan, setFilterAngkatan] = useState('Semua');
-  const [filterMK, setFilterMK] = useState('Semua');
   const [filterCPL, setFilterCPL] = useState('Semua');
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -58,7 +57,6 @@ export default function JamuDashboardView() {
     if (filterSemester !== 'Semua') params.set('sem', filterSemester);
     if (filterKurikulum !== 'Semua') params.set('kur', filterKurikulum);
     if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
-    if (filterMK !== 'Semua') params.set('mk', filterMK);
     if (filterCPL !== 'Semua') params.set('cpl', filterCPL);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -80,12 +78,12 @@ export default function JamuDashboardView() {
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterMK, filterCPL]);
+  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterCPL]);
 
   const stats = useMemo(() => [
     {
       label: 'Rata-rata Capaian CPL',
-      value: data ? `${data.stats.rata_cpl}%` : '-',
+      value: data ? String(data.stats.rata_cpl) : '-',
       target: 'Target: mengikuti CPL',
       icon: <Target className="w-6 h-6" />,
       color: 'bg-indigo-50 text-indigo-600',
@@ -165,13 +163,12 @@ export default function JamuDashboardView() {
           <Filter className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-700">Filter Analisis Mutu</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={data?.options.tahun ?? []} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={data?.options.semester ?? []} />
           <FilterSelect label="Kurikulum" value={filterKurikulum} onChange={setFilterKurikulum} options={data?.options.kurikulum ?? []} />
           <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={data?.options.angkatan ?? []} />
           <FilterSelect label="CPL" value={filterCPL} onChange={setFilterCPL} options={data?.options.cpl ?? []} />
-          <FilterSelect label="Mata Kuliah" value={filterMK} onChange={setFilterMK} options={data?.options.mata_kuliah ?? []} />
         </div>
       </div>
 

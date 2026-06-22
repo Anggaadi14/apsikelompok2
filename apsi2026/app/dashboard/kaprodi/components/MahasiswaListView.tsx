@@ -1,7 +1,7 @@
 'use client';
 
 import { UserSession } from '../../../data/users';
-import { Search, Download } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface MahasiswaListViewProps {
@@ -13,7 +13,7 @@ type MahasiswaRow = {
   nim: string;
   nama: string;
   angkatan: number | null;
-  ipk: number | null;
+  cpl: number | null;
   semester: number | null;
   status: string;
   jumlah_kelas: number;
@@ -21,8 +21,14 @@ type MahasiswaRow = {
 
 type Summary = {
   total: number;
-  rata_ipk: number | null;
+  rata_cpl: number | null;
   rata_semester: number | null;
+};
+type Option = { value: string; label: string };
+type FilterOptions = {
+  angkatan: string[];
+  semester: string[];
+  kelas: Option[];
 };
 
 function authHeaders(): Record<string, string> {
@@ -32,8 +38,12 @@ function authHeaders(): Record<string, string> {
 
 export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterAngkatan, setFilterAngkatan] = useState('Semua');
+  const [filterSemester, setFilterSemester] = useState('Semua');
+  const [filterKelas, setFilterKelas] = useState('Semua');
   const [mahasiswaList, setMahasiswaList] = useState<MahasiswaRow[]>([]);
-  const [summary, setSummary] = useState<Summary>({ total: 0, rata_ipk: null, rata_semester: null });
+  const [summary, setSummary] = useState<Summary>({ total: 0, rata_cpl: null, rata_semester: null });
+  const [options, setOptions] = useState<FilterOptions>({ angkatan: [], semester: [], kelas: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -42,6 +52,9 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
     const timer = setTimeout(() => {
       const params = new URLSearchParams();
       if (searchTerm.trim()) params.set('q', searchTerm.trim());
+      if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
+      if (filterSemester !== 'Semua') params.set('semester', filterSemester);
+      if (filterKelas !== 'Semua') params.set('kelas', filterKelas);
 
       setLoading(true);
       setError('');
@@ -54,7 +67,8 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
           const json = await res.json().catch(() => ({}));
           if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat mahasiswa.');
           setMahasiswaList(json.data.items ?? []);
-          setSummary(json.data.summary ?? { total: 0, rata_ipk: null, rata_semester: null });
+          setSummary(json.data.summary ?? { total: 0, rata_cpl: null, rata_semester: null });
+          setOptions(json.data.options ?? { angkatan: [], semester: [], kelas: [] });
         })
         .catch((err) => {
           if (err.name !== 'AbortError') setError(err.message || 'Gagal memuat mahasiswa.');
@@ -66,40 +80,25 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [searchTerm]);
-
-  const handleExportData = () => {
-    const csvContent = [
-      ['NIM', 'Nama', 'Angkatan', 'IPK', 'Semester', 'Status', 'Jumlah Kelas'],
-      ...mahasiswaList.map((m) => [
-        m.nim,
-        m.nama,
-        m.angkatan ?? '',
-        m.ipk ?? '',
-        m.semester ?? '',
-        m.status,
-        m.jumlah_kelas,
-      ]),
-    ]
-      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `data_mahasiswa_${new Date().getTime()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  }, [searchTerm, filterAngkatan, filterSemester, filterKelas]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Data Mahasiswa</h1>
         <p className="text-gray-600 mt-1">Mengelola data mahasiswa {sessionUser.prodi}</p>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Filter Data Mahasiswa</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={options.angkatan} />
+          <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={options.semester} />
+          <FilterSelect label="Kelas" value={filterKelas} onChange={setFilterKelas} options={options.kelas} />
+        </div>
       </div>
 
       <div className="flex gap-4 items-end">
@@ -113,13 +112,6 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-        <button
-          onClick={handleExportData}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
       </div>
 
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg p-3 text-sm">{error}</div>}
@@ -132,7 +124,7 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">NIM</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Nama</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Angkatan</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">IPK Est.</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Rata-rata CPL</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Semester</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
               </tr>
@@ -146,7 +138,7 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
                     <td className="px-6 py-3 text-sm text-gray-900">{mhs.angkatan ?? '-'}</td>
                     <td className="px-6 py-3 text-sm text-gray-900">
                       <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">
-                        {mhs.ipk ?? '-'}
+                        {mhs.cpl ?? '-'}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-sm text-gray-900">{mhs.semester ?? '-'}</td>
@@ -175,14 +167,39 @@ export default function MahasiswaListView({ sessionUser }: MahasiswaListViewProp
           <p className="text-2xl font-bold text-gray-900 mt-1">{loading ? '...' : summary.total}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm text-gray-600">Rata-rata IPK Est.</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{summary.rata_ipk ?? '-'}</p>
+          <p className="text-sm text-gray-600">Rata-rata CPL</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{summary.rata_cpl ?? '-'}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-600">Rata-rata Semester</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{summary.rata_semester ?? '-'}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FilterSelect(props: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  values?: string[];
+  options?: Option[];
+}) {
+  const options = props.options ?? (props.values ?? []).map((v) => ({ value: v, label: v }));
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-1">{props.label}</label>
+      <select
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        className="w-full text-sm border-gray-300 rounded-md py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
+      >
+        <option value="Semua">Semua</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
     </div>
   );
 }

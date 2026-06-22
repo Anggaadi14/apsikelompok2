@@ -26,6 +26,7 @@ type Option = { value: string; label: string };
 type CplChartRow = { id: string; name: string; target: number; realisasi: number; deskripsi?: string };
 type CriticalIk = { kode: string; nilai: number; target: number; deskripsi: string; cpl: string };
 type IncompleteClass = { id_kelas: number; label: string; status: string };
+type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
 type DashboardData = {
   options: {
     tahun: string[];
@@ -61,7 +62,6 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
   const [filterSemester, setFilterSemester] = useState('Semua');
   const [filterKurikulum, setFilterKurikulum] = useState('Semua');
   const [filterAngkatan, setFilterAngkatan] = useState('Semua');
-  const [filterMK, setFilterMK] = useState('Semua');
   const [filterKelas, setFilterKelas] = useState('Semua');
   const [filterCPL, setFilterCPL] = useState('Semua');
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -76,7 +76,6 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
     if (filterSemester !== 'Semua') params.set('sem', filterSemester);
     if (filterKurikulum !== 'Semua') params.set('kur', filterKurikulum);
     if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
-    if (filterMK !== 'Semua') params.set('mk', filterMK);
     if (filterKelas !== 'Semua') params.set('kelas', filterKelas);
     if (filterCPL !== 'Semua') params.set('cpl', filterCPL);
 
@@ -99,14 +98,14 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterMK, filterKelas, filterCPL]);
+  }, [filterTahun, filterSemester, filterKurikulum, filterAngkatan, filterKelas, filterCPL]);
 
   const stats = useMemo(() => {
     const s = data?.stats;
     return [
       {
         label: 'Rata-rata Capaian CPL',
-        value: s ? `${s.rata_cpl}%` : '-',
+        value: s ? String(s.rata_cpl) : '-',
         target: 'Target: mengikuti CPL',
         icon: <Target className="w-6 h-6" />,
         color: 'bg-indigo-50 text-indigo-600',
@@ -176,7 +175,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
     );
 
     doc.setFontSize(9);
-    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Kurikulum: ${filterKurikulum}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  MK: ${filterMK}  ·  Kelas: ${filterKelas}`;
+    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Kurikulum: ${filterKurikulum}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  Kelas: ${filterKelas}`;
     doc.text(doc.splitTextToSize(`Filter: ${filterLine}`, 180), marginX, 37);
 
     doc.setFontSize(10);
@@ -206,7 +205,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
       headStyles: { fillColor: [79, 70, 229] },
     });
 
-    let cursorY = (doc as any).lastAutoTable.finalY + 10;
+    let cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 58) + 10;
     if (cursorY > pageHeight - 40) {
       doc.addPage();
       cursorY = 16;
@@ -232,7 +231,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [225, 29, 72] },
       });
-      cursorY = (doc as any).lastAutoTable.finalY + 10;
+      cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? cursorY) + 10;
     } else {
       doc.setFontSize(9);
       doc.text('Tidak ada CPL/IK kritis pada filter ini.', marginX, cursorY);
@@ -310,13 +309,12 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
           <Filter className="w-4 h-4 text-gray-500" />
           <h2 className="text-sm font-semibold text-gray-700">Filter Analisis OBE</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={data?.options.tahun ?? []} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={data?.options.semester ?? []} />
           <FilterSelect label="Kurikulum" value={filterKurikulum} onChange={setFilterKurikulum} options={data?.options.kurikulum ?? []} />
           <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={data?.options.angkatan ?? []} />
           <FilterSelect label="CPL" value={filterCPL} onChange={setFilterCPL} options={data?.options.cpl ?? []} />
-          <FilterSelect label="Mata Kuliah" value={filterMK} onChange={setFilterMK} options={data?.options.mata_kuliah ?? []} />
           <FilterSelect label="Kelas" value={filterKelas} onChange={setFilterKelas} options={data?.options.kelas ?? []} />
         </div>
       </div>
