@@ -3,26 +3,20 @@
 // POST /api/auth/signup
 // Body: { nama, email, password, role: 'mahasiswa' | 'dosen' }
 //
-// Flow:
-//   1. Validasi input (nama, email format, password >= 6 chars, role allowed)
-//   2. Cek email belum ada di tabel user
-//   3. Generate token verifikasi (32 bytes hex, 24h expiry)
-//   4. Hash password
-//   5. Insert user dengan status='pending_verification'
-//   6. Kirim email verifikasi via Mailtrap
-//   7. Return success + (di dev) verifyUrl untuk testing manual
+// Password storage/auth itself is Supabase Auth's job now (auth.users).
+// app_user keeps its own pending_verification gate + token so the existing
+// branded-email verification UX (app/lib/email.ts, app/verify/page.tsx)
+// keeps working unchanged.
 
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
-import { getDb } from '@/app/lib/db'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 import { sendVerificationEmail } from '@/app/lib/email'
 
 const ALLOWED_ROLES = ['mahasiswa', 'dosen'] as const
 type AllowedRole = (typeof ALLOWED_ROLES)[number]
 
 const TOKEN_EXPIRY_HOURS = 24
-const BCRYPT_ROUNDS = 10
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(req: NextRequest) {
@@ -33,7 +27,6 @@ export async function POST(req: NextRequest) {
     const password = String(body?.password ?? '')
     const role = body?.role as AllowedRole
 
-    // ─── Validasi ──────────────────────────────────
     if (!nama || nama.length < 2) {
       return NextResponse.json(
         { success: false, error: 'INVALID_INPUT', message: 'Nama wajib diisi (minimal 2 karakter)' },
@@ -63,58 +56,73 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const db = getDb()
+    const admin = createSupabaseAdminClient()
 
-    // ─── Cek email duplikat ────────────────────────
-    const [existing] = await db.query<any[]>(
-      `SELECT id_user, status FROM user WHERE email = ? LIMIT 1`,
-      [email],
-    )
-    if ((existing as any[]).length > 0) {
-      const existingUser = (existing as any[])[0]
-      if (existingUser.status === 'aktif') {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'EMAIL_TAKEN',
-            message: 'Email ini sudah terdaftar. Silakan login.',
-          },
-          { status: 409 },
-        )
-      }
-      // Kalau pending_verification, kita allow resend (overwrite token)
+    const { data: existing } = await admin
+      .from('app_user')
+      .select('id_user, auth_user_id, status')
+      .eq('email', email)
+      .maybeSingle<{ id_user: number; auth_user_id: string; status: string }>()
+
+    if (existing && existing.status === 'aktif') {
+      return NextResponse.json(
+        { success: false, error: 'EMAIL_TAKEN', message: 'Email ini sudah terdaftar. Silakan login.' },
+        { status: 409 },
+      )
     }
 
-    // ─── Generate token + hash password ────────────
     const token = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
-    const sandiHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000).toISOString()
 
-    // ─── Insert atau update user pending ───────────
-    if ((existing as any[]).length > 0) {
-      await db.query(
-        `UPDATE user
-         SET nama_input = ?, sandi_hash = ?, role = ?,
-             token_verifikasi = ?, token_expires_at = ?, status = 'pending_verification',
-             updated_at = NOW()
-         WHERE email = ?`,
-        [nama, sandiHash, role, token, expiresAt, email],
-      )
+    if (existing) {
+      // Resend case (status masih pending_verification): update password + token.
+      const { error: updErr } = await admin.auth.admin.updateUserById(existing.auth_user_id, {
+        password,
+        email_confirm: true,
+      })
+      if (updErr) throw updErr
+
+      const { error: upErr } = await admin
+        .from('app_user')
+        .update({
+          nama_input: nama,
+          role,
+          status: 'pending_verification',
+          token_verifikasi: token,
+          token_expires_at: expiresAt,
+        })
+        .eq('id_user', existing.id_user)
+      if (upErr) throw upErr
     } else {
-      await db.query(
-        `INSERT INTO user (email, sandi_hash, role, status, token_verifikasi, token_expires_at, nama_input)
-         VALUES (?, ?, ?, 'pending_verification', ?, ?, ?)`,
-        [email, sandiHash, role, token, expiresAt, nama],
-      )
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // verifikasi ditangani sendiri lewat token kustom, bukan oleh Supabase
+      })
+      if (createErr || !created?.user) {
+        const msg = createErr?.message?.toLowerCase() ?? ''
+        if (msg.includes('already') || msg.includes('registered')) {
+          return NextResponse.json(
+            { success: false, error: 'EMAIL_TAKEN', message: 'Email ini sudah terdaftar. Silakan login.' },
+            { status: 409 },
+          )
+        }
+        throw createErr ?? new Error('Gagal membuat akun.')
+      }
+
+      const { error: insErr } = await admin.from('app_user').insert({
+        auth_user_id: created.user.id,
+        email,
+        role,
+        status: 'pending_verification',
+        token_verifikasi: token,
+        token_expires_at: expiresAt,
+        nama_input: nama,
+      })
+      if (insErr) throw insErr
     }
 
-    // ─── Kirim email ───────────────────────────────
-    const { verifyUrl, sent } = await sendVerificationEmail({
-      to: email,
-      nama,
-      token,
-      role,
-    })
+    const { verifyUrl, sent } = await sendVerificationEmail({ to: email, nama, token, role })
 
     return NextResponse.json({
       success: true,
@@ -125,7 +133,6 @@ export async function POST(req: NextRequest) {
         email,
         role,
         sent,
-        // verifyUrl HANYA di-return di dev mode untuk kemudahan testing
         ...(process.env.NODE_ENV !== 'production' ? { verifyUrl } : {}),
       },
     })

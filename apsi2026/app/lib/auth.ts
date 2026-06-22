@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
+import { createSupabaseServerClient } from '@/app/lib/supabase/server'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 // =====================================================================
 // Types
@@ -9,16 +10,11 @@ import bcrypt from 'bcryptjs'
 export type UserRole = 'mahasiswa' | 'dosen' | 'kaprodi' | 'jamu' | 'admin'
 
 /**
- * Session shape dipakai semua endpoint.
- * 
- * Field BARU (Tahap 4.5.A):
- *   - id_user, email, id_mahasiswa, id_staff
- * 
- * Field LEGACY (tetap dipertahankan untuk komponen lama):
- *   - id ("mhs_X" | "staff_X"), username, name, identifier, initials, prodi
+ * Session shape dipakai semua endpoint. Identik dengan sebelum migrasi ke
+ * Supabase Auth supaya tidak ada call site (41 routes + ~20 file frontend
+ * yang menyimpan ini di sessionStorage) yang perlu berubah bentuk.
  */
 export interface SessionUser {
-  // Baru
   id_user: number
   email: string
   id_mahasiswa: number | null
@@ -26,7 +22,7 @@ export interface SessionUser {
   role: UserRole
   force_password_change?: 0 | 1
 
-  // Legacy compat
+  // Legacy compat — dipertahankan untuk komponen lama yang sudah ada.
   id: string
   username: string
   name: string
@@ -47,83 +43,92 @@ export class AuthError extends Error {
 }
 
 // =====================================================================
-// Parse entitas legacy: "mhs_1" / "staff_3"
+// Session — sumber kebenaran sekarang cookie Supabase Auth, bukan header
+// X-User-Session. Header itu masih boleh dikirim frontend (harmless), tapi
+// tidak lagi dipercaya untuk otorisasi.
 // =====================================================================
 
-export function parseEntityId(id: string): { kind: 'mhs' | 'staff'; entityId: number } | null {
-  const m = /^(mhs|staff)_(\d+)$/.exec(id)
-  if (!m) return null
-  return { kind: m[1] as 'mhs' | 'staff', entityId: parseInt(m[2], 10) }
+type AppUserRow = {
+  id_user: number
+  role: UserRole
+  status: 'aktif' | 'nonaktif' | 'pending_verification'
+  force_password_change: boolean
+  id_mahasiswa: number | null
+  id_staff: number | null
+  nama_input: string | null
+  mahasiswa: { nim: string; nama_mahasiswa: string } | null
+  staff: { nip_nidn_nik: string; nama_lengkap: string } | null
 }
 
-// =====================================================================
-// Session parsing dari header X-User-Session
-// =====================================================================
+function buildInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+}
 
-export function parseSessionHeader(raw: string | null): SessionUser {
-  if (!raw) throw new AuthError('UNAUTHORIZED', 401, 'Header X-User-Session tidak ada')
+export async function getSessionUser(_req?: NextRequest): Promise<SessionUser> {
+  const supabase = await createSupabaseServerClient()
+  const { data: authData, error: authErr } = await supabase.auth.getUser()
 
-  let parsed: any
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    throw new AuthError('INVALID_SESSION', 401, 'X-User-Session bukan JSON valid')
+  if (authErr || !authData?.user) {
+    throw new AuthError('UNAUTHORIZED', 401, 'Tidak ada sesi yang valid. Silakan login ulang.')
+  }
+  const authUser = authData.user
+
+  const admin = createSupabaseAdminClient()
+  const { data: profile, error: profileErr } = await admin
+    .from('app_user')
+    .select(
+      `id_user, role, status, force_password_change, id_mahasiswa, id_staff, nama_input,
+       mahasiswa:id_mahasiswa ( nim, nama_mahasiswa ),
+       staff:id_staff ( nip_nidn_nik, nama_lengkap )`,
+    )
+    .eq('auth_user_id', authUser.id)
+    .maybeSingle<AppUserRow>()
+
+  if (profileErr) {
+    throw new AuthError('INVALID_SESSION', 401, `Gagal memuat profil user: ${profileErr.message}`)
+  }
+  if (!profile) {
+    throw new AuthError('INVALID_SESSION', 401, 'Profil user tidak ditemukan untuk sesi ini.')
+  }
+  if (profile.status !== 'aktif') {
+    throw new AuthError('FORBIDDEN', 403, 'Akun nonaktif. Hubungi admin.')
   }
 
-  if (!parsed || typeof parsed !== 'object') {
-    throw new AuthError('INVALID_SESSION', 401, 'X-User-Session kosong')
-  }
+  const isMahasiswa = profile.role === 'mahasiswa' && !!profile.id_mahasiswa
+  const legacyId = isMahasiswa
+    ? `mhs_${profile.id_mahasiswa}`
+    : profile.id_staff
+      ? `staff_${profile.id_staff}`
+      : ''
 
-  // Backward compat: kalau session lama (sebelum Tahap 4.5.A), id_user mungkin tidak ada.
-  // Derive dari parseEntityId(id) supaya tidak break komponen yang masih kirim format lama.
-  let id_user = typeof parsed.id_user === 'number' ? parsed.id_user : 0
-  let id_mahasiswa: number | null =
-    typeof parsed.id_mahasiswa === 'number' ? parsed.id_mahasiswa : null
-  let id_staff: number | null =
-    typeof parsed.id_staff === 'number' ? parsed.id_staff : null
+  const name = isMahasiswa
+    ? profile.mahasiswa?.nama_mahasiswa ?? ''
+    : profile.staff?.nama_lengkap || profile.nama_input || authUser.email || ''
 
-  if (id_mahasiswa === null && id_staff === null && typeof parsed.id === 'string') {
-    const ent = parseEntityId(parsed.id)
-    if (ent) {
-      if (ent.kind === 'mhs') id_mahasiswa = ent.entityId
-      else id_staff = ent.entityId
-    }
-  }
+  const identifier = isMahasiswa
+    ? profile.mahasiswa?.nim ?? ''
+    : profile.staff?.nip_nidn_nik ?? ''
 
-  const role = parsed.role as UserRole
-  const validRoles: UserRole[] = ['mahasiswa', 'dosen', 'kaprodi', 'jamu', 'admin']
-  if (!validRoles.includes(role)) {
-    throw new AuthError('INVALID_SESSION', 401, `Role '${role}' tidak dikenal`)
-  }
-
-  const legacyId =
-    parsed.id ||
-    (id_mahasiswa ? `mhs_${id_mahasiswa}` : id_staff ? `staff_${id_staff}` : '')
-
-  const force_password_change = (Number(parsed.force_password_change) === 1 ? 1 : 0) as 0 | 1;
   return {
-    id_user,
-    force_password_change,
-    email: parsed.email || '',
-    id_mahasiswa,
-    id_staff,
-    role,
+    id_user: profile.id_user,
+    email: authUser.email ?? '',
+    id_mahasiswa: profile.id_mahasiswa,
+    id_staff: profile.id_staff,
+    role: profile.role,
+    force_password_change: profile.force_password_change ? 1 : 0,
     id: legacyId,
-    username: parsed.username || (parsed.email ? String(parsed.email).split('@')[0] : ''),
-    name: parsed.name || '',
-    identifier: parsed.identifier || '',
-    initials: parsed.initials || '',
-    prodi: parsed.prodi || 'Prodi Teknik Industri UNS',
+    username: (authUser.email ?? '').split('@')[0],
+    name,
+    identifier,
+    initials: buildInitials(name || authUser.email || '?'),
+    prodi: 'Prodi Teknik Industri UNS',
   }
-}
-
-// =====================================================================
-// Public helpers untuk endpoint
-// =====================================================================
-
-export async function getSessionUser(req: NextRequest): Promise<SessionUser> {
-  const raw = req.headers.get('x-user-session') || req.headers.get('X-User-Session')
-  return parseSessionHeader(raw)
 }
 
 export async function requireRole(
@@ -156,53 +161,6 @@ export function serverError(message: string): NextResponse {
     { success: false, error: 'SERVER_ERROR', message },
     { status: 500 },
   )
-}
-
-// =====================================================================
-// Password hashing
-// =====================================================================
-
-const BCRYPT_ROUNDS = 10
-
-export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, BCRYPT_ROUNDS)
-}
-
-export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  if (!hash) return false
-  // Backward compat: hash bcrypt mulai dengan $2*
-  if (hash.startsWith('$2')) {
-    return bcrypt.compare(plain, hash)
-  }
-  // Plaintext legacy (jangan diandalkan, hanya untuk migrasi awal)
-  return plain === hash
-}
-
-// =====================================================================
-// LEGACY SHIMS (pertahankan untuk komponen lama yang belum di-refactor)
-// =====================================================================
-
-export interface LegacySession {
-  id: string
-  role: UserRole
-  name?: string
-}
-
-/** Sync version, digunakan oleh endpoint profile + semester yang belum migrasi */
-export function getSessionFromRequest(req: NextRequest): LegacySession | null {
-  const raw = req.headers.get('x-user-session') || req.headers.get('X-User-Session')
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    return {
-      id: parsed.id || '',
-      role: parsed.role,
-      name: parsed.name,
-    }
-  } catch {
-    return null
-  }
 }
 
 export function unauthorized(message = 'Unauthorized'): NextResponse {

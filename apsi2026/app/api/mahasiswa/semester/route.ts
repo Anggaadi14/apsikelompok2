@@ -1,86 +1,55 @@
 // app/api/mahasiswa/semester/route.ts
 //
-// ENDPOINT: GET /api/mahasiswa/semester
-//
-// Mengembalikan daftar semester yang pernah diambil oleh mahasiswa ini.
-// Data ini digunakan oleh Navbar (dropdown pilih semester).
-//
-// Perlu dipahami: Tidak ada tabel semester di schema ini.
-// Kita generate daftar semester dari kombinasi unik
-// kolom (semester, tahun_akademik) di tabel nilai_detail milik mahasiswa ini.
-//
-// Contoh output:
-//   ["Ganjil 2024/2025", "Genap 2023/2024", "Ganjil 2023/2024"]
+// GET /api/mahasiswa/semester — daftar semester yang pernah diambil mahasiswa
+// ini, dipakai oleh dropdown semester di Navbar. Diturunkan dari kombinasi
+// unik (kelas_mk.tahun_akademik, kelas_mk.semester) lewat nilai_detail.
 
-import { NextRequest } from 'next/server';
-import { getSessionUser, unauthorized, forbidden, serverError } from '@/app/lib/auth';
-import { getDb } from '@/app/lib/db';
-import { formatSemester } from '@/app/lib/grading';
-import type mysql from 'mysql2/promise';
+import { NextRequest, NextResponse } from 'next/server'
+import { requireRole, handleAuthError, serverError } from '@/app/lib/auth'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
+import { formatSemester } from '@/app/lib/grading'
 
-interface SemesterRow {
-  semester: string;
-  tahun_akademik: string;
-}
+type Row = { kelas: { tahun_akademik: string; semester: string } | null }
 
 export async function GET(request: NextRequest) {
-  // ── Validasi session ──────────────────────────────────────────────────
-  const session = await getSessionUser(request);
-  if (!session) return unauthorized();
-  if (session.role !== 'mahasiswa') return forbidden();
-
-  const nim = session.identifier;
-
   try {
-    const db = getDb();
-
-    // Cari id_mahasiswa
-    const [mhsRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT id_mahasiswa FROM mahasiswa WHERE nim = ? LIMIT 1`,
-      [nim]
-    );
-
-    if (mhsRows.length === 0) {
-      // Kalau tidak ada di DB, kembalikan array default (fallback)
-      return Response.json({
-        success: true,
-        data: ['Ganjil 2024/2025'],
-      });
+    const session = await requireRole(request, ['mahasiswa'])
+    if (!session.id_mahasiswa) {
+      return NextResponse.json({ success: true, data: ['Ganjil 2024/2025'] })
     }
 
-    const idMahasiswa = mhsRows[0].id_mahasiswa as number;
+    const admin = createSupabaseAdminClient()
+    const { data, error } = await admin
+      .from('nilai_detail')
+      .select('kelas:kelas_mk ( tahun_akademik, semester )')
+      .eq('id_mahasiswa', session.id_mahasiswa)
+    if (error) throw error
 
-    // Ambil kombinasi unik semester + tahun_akademik dari nilai_detail
-    // ORDER BY: tahun terbaru dulu, ganjil sebelum genap
-    const [semRows] = await db.query<mysql.RowDataPacket[]>(
-      `SELECT DISTINCT semester, tahun_akademik
-       FROM nilai_detail
-       WHERE id_mahasiswa = ?
-       ORDER BY tahun_akademik DESC,
-                FIELD(semester, 'ganjil', 'genap')`,
-      [idMahasiswa]
-    );
-
-    if ((semRows as SemesterRow[]).length === 0) {
-      // Mahasiswa belum punya nilai → kembalikan tahun berjalan sebagai default
-      return Response.json({
-        success: true,
-        data: ['Ganjil 2024/2025'],
-      });
+    const seen = new Set<string>()
+    for (const r of (data ?? []) as unknown as Row[]) {
+      if (r.kelas) seen.add(`${r.kelas.semester}::${r.kelas.tahun_akademik}`)
     }
 
-    // Format ke string yang dimengerti Navbar: "Ganjil 2024/2025"
-    const daftarSemester = (semRows as SemesterRow[]).map((row) =>
-      formatSemester(row.semester, row.tahun_akademik)
-    );
+    if (seen.size === 0) {
+      return NextResponse.json({ success: true, data: ['Ganjil 2024/2025'] })
+    }
 
-    return Response.json({
-      success: true,
-      data: daftarSemester,
-    });
+    const daftarSemester = [...seen]
+      .map((key) => {
+        const [semester, tahun] = key.split('::')
+        return { semester, tahun }
+      })
+      .sort((a, b) => {
+        if (a.tahun !== b.tahun) return b.tahun.localeCompare(a.tahun)
+        return a.semester.toLowerCase() === 'ganjil' ? -1 : 1
+      })
+      .map((s) => formatSemester(s.semester, s.tahun))
 
+    return NextResponse.json({ success: true, data: daftarSemester })
   } catch (error) {
-    console.error('[API] GET /mahasiswa/semester error:', error);
-    return serverError(error instanceof Error ? error.message : String(error));
+    const a = handleAuthError(error)
+    if (a) return a
+    console.error('[API] GET /mahasiswa/semester error:', error)
+    return serverError(error instanceof Error ? error.message : String(error))
   }
 }

@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/app/lib/db'
-import { handleAuthError, requireRole } from '@/app/lib/auth'
+// app/api/mahasiswa/cpl/route.ts
+//
+// GET /api/mahasiswa/cpl — capaian CPL mahasiswa yang sedang login, dipecah
+// sampai level CPMK. Nilai per level (CPMK/IK/CPL) diambil langsung dari view
+// OBE engine (v_nilai_cpmk_per_mhs / v_nilai_ik_per_mhs / v_nilai_cpl_per_mhs)
+// supaya rumus weighting konsisten dengan migrations/011 — tidak dihitung
+// ulang di sini.
 
-interface CplDataItem {
-  name: string
-  nilai: number
-  target: number
-  status: 'Tercapai' | 'Belum Tercapai' | 'Belum Ditempuh'
-  kategori: string
-}
+import { NextRequest, NextResponse } from 'next/server'
+import { handleAuthError, requireRole } from '@/app/lib/auth'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
+import { resolveKurikulumId } from '@/app/lib/kurikulum'
 
 interface CpmkItem {
   kode: string
@@ -16,10 +17,8 @@ interface CpmkItem {
   bobot: number
   nilai: number
   matakuliah: string
-  semester: string
   nilaiMK: number
 }
-
 interface IkItem {
   kode: string
   deskripsi: string
@@ -27,184 +26,145 @@ interface IkItem {
   nilai: number
   cpmk: CpmkItem[]
 }
-
 interface DetailCplItem {
   cpl: string
   deskripsi: string
   nilai: number
+  target: number
   status: 'Tercapai' | 'Belum Tercapai' | 'Belum Ditempuh'
   ik: IkItem[]
+}
+interface CplDataItem {
+  name: string
+  nilai: number
+  target: number
+  status: DetailCplItem['status']
+  kategori: string
 }
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireRole(req, ['mahasiswa'])
-    const idMahasiswa = session.id
-    const db = getDb()
-
-    // 1. Ambil daftar CPL (defensif: kolom kategori opsional)
-    let cplRows: any[]
-    try {
-      const [rs] = await db.execute(
-        'SELECT id_cpl, kode_cpl, deskripsi, kategori FROM cpl ORDER BY kode_cpl',
-      )
-      cplRows = rs as any[]
-    } catch {
-      const [rs] = await db.execute(
-        'SELECT id_cpl, kode_cpl, deskripsi FROM cpl ORDER BY kode_cpl',
-      )
-      cplRows = (rs as any[]).map((r) => ({ ...r, kategori: null }))
+    const idMahasiswa = session.id_mahasiswa
+    if (!idMahasiswa) {
+      return NextResponse.json({ success: true, data: { cplData: [], detailCpl: [] } })
     }
 
-    if (cplRows.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: { cplData: [], detailCpl: [] },
-      })
+    const admin = createSupabaseAdminClient()
+
+    const { data: mhs } = await admin.from('mahasiswa').select('angkatan').eq('id_mahasiswa', idMahasiswa).maybeSingle<{ angkatan: number | null }>()
+    const idKurikulum = await resolveKurikulumId(admin, mhs?.angkatan ?? null)
+
+    if (!idKurikulum) {
+      return NextResponse.json({ success: true, data: { cplData: [], detailCpl: [] } })
     }
 
-    // 2. IK + mapping ke CPL
-    const [ikRows] = await db.execute(
-      `SELECT id_ik, id_cpl, kode_ik, deskripsi, bobot_ik_persen
-       FROM mapping_ik_cpl ORDER BY kode_ik`,
-    )
-
-    // 3. Target capaian per IK (tahun_akademik terbaru)
-    const [targetRows] = await db.execute(
-      `SELECT id_ik, MAX(tahun_akademik) AS tahun_akademik,
-              MAX(nilai_target_minimal) AS nilai_target_minimal
-       FROM target_capaian GROUP BY id_ik`,
-    )
-    const targetMap = new Map<number, number>()
-    for (const r of targetRows as any[]) {
-      targetMap.set(r.id_ik, Number(r.nilai_target_minimal))
+    const { data: cplRows, error: cplErr } = await admin
+      .from('cpl')
+      .select('id_cpl, kode_cpl, deskripsi_id, domain, target_minimal, urutan')
+      .eq('id_kurikulum', idKurikulum)
+      .order('urutan')
+    if (cplErr) throw cplErr
+    if (!cplRows || cplRows.length === 0) {
+      return NextResponse.json({ success: true, data: { cplData: [], detailCpl: [] } })
     }
+    const cplIds = cplRows.map((c) => c.id_cpl)
 
-    // 4. Mapping CPMK→IK + CPMK detail + MK (defensif: kolom deskripsi opsional)
-    let cpmkRows: any[] = []
-    try {
-      const [rs] = await db.execute(
-        `SELECT mci.id_ik, mci.bobot_cpmk_persen,
-                c.id_cpmk, c.kode_cpmk, c.deskripsi AS deskripsi_cpmk,
-                mk.id_mk, mk.kode_mk, mk.nama_mk, mk.sks, mk.plot_semester
-         FROM mapping_cpmk_ik mci
-         JOIN cpmk c ON c.id_cpmk = mci.id_cpmk
-         JOIN mata_kuliah mk ON mk.id_mk = c.id_mk`,
-      )
-      cpmkRows = rs as any[]
-    } catch {
-      const [rs] = await db.execute(
-        `SELECT mci.id_ik, mci.bobot_cpmk_persen,
-                c.id_cpmk, c.kode_cpmk,
-                mk.id_mk, mk.kode_mk, mk.nama_mk, mk.sks, mk.plot_semester
-         FROM mapping_cpmk_ik mci
-         JOIN cpmk c ON c.id_cpmk = mci.id_cpmk
-         JOIN mata_kuliah mk ON mk.id_mk = c.id_mk`,
-      )
-      cpmkRows = (rs as any[]).map((r) => ({ ...r, deskripsi_cpmk: '' }))
-    }
+    const { data: nilaiCplRows } = await admin
+      .from('v_nilai_cpl_per_mhs')
+      .select('id_cpl, nilai_cpl')
+      .eq('id_mahasiswa', idMahasiswa)
+      .in('id_cpl', cplIds)
+    const nilaiCplMap = new Map((nilaiCplRows ?? []).map((r) => [r.id_cpl, Number(r.nilai_cpl)]))
 
-    // 5. Nilai per komponen → CPMK untuk mahasiswa ini
-    const [nilaiRows] = await db.execute(
-      `SELECT mkc.id_cpmk, mkc.bobot_media_asesmen,
-              nd.nilai_asli, nd.nilai_remedi
-       FROM mapping_komponen_cpmk mkc
-       JOIN komponen_nilai kn ON kn.id_komponen = mkc.id_komponen
-       LEFT JOIN nilai_detail nd
-         ON nd.id_komponen = mkc.id_komponen
-        AND nd.id_mahasiswa = ?`,
-      [idMahasiswa],
-    )
-
-    // Build helper maps
-    const ikByCpl = new Map<number, any[]>()
-    for (const ik of ikRows as any[]) {
+    const { data: ikRows } = await admin
+      .from('mapping_ik_cpl')
+      .select('id_ik, id_cpl, bobot_persen, indikator_kinerja:id_ik ( kode_ik, deskripsi )')
+      .in('id_cpl', cplIds)
+    type IkRow = { id_ik: number; id_cpl: number; bobot_persen: number; indikator_kinerja: { kode_ik: string; deskripsi: string } }
+    const ikByCpl = new Map<number, IkRow[]>()
+    for (const ik of (ikRows ?? []) as unknown as IkRow[]) {
       if (!ikByCpl.has(ik.id_cpl)) ikByCpl.set(ik.id_cpl, [])
       ikByCpl.get(ik.id_cpl)!.push(ik)
     }
+    const ikIds = (ikRows ?? []).map((r) => r.id_ik)
 
-    const cpmkByIk = new Map<number, any[]>()
-    for (const c of cpmkRows) {
+    const { data: nilaiIkRows } = ikIds.length
+      ? await admin.from('v_nilai_ik_per_mhs').select('id_ik, nilai_ik').eq('id_mahasiswa', idMahasiswa).in('id_ik', ikIds)
+      : { data: [] as { id_ik: number; nilai_ik: number }[] }
+    const nilaiIkMap = new Map((nilaiIkRows ?? []).map((r) => [r.id_ik, Number(r.nilai_ik)]))
+
+    const { data: cpmkRows } = ikIds.length
+      ? await admin
+          .from('mapping_cpmk_ik')
+          .select(
+            `id_cpmk, id_ik, bobot_persen,
+             cpmk:id_cpmk ( kode_cpmk, deskripsi_id, id_mata_kuliah, mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk ) )`,
+          )
+          .in('id_ik', ikIds)
+      : { data: [] as any[] }
+    type CpmkRow = {
+      id_cpmk: number
+      id_ik: number
+      bobot_persen: number
+      cpmk: { kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; mata_kuliah: { kode_mk: string; nama_mk: string } }
+    }
+    const cpmkByIk = new Map<number, CpmkRow[]>()
+    for (const c of (cpmkRows ?? []) as unknown as CpmkRow[]) {
       if (!cpmkByIk.has(c.id_ik)) cpmkByIk.set(c.id_ik, [])
       cpmkByIk.get(c.id_ik)!.push(c)
     }
+    const cpmkIds = (cpmkRows ?? []).map((r) => r.id_cpmk)
 
-    // Nilai CPMK = Σ(efektif × bobot_media_asesmen/100)
-    const nilaiCpmkMap = new Map<number, number>()
-    const tertempuhCpmk = new Set<number>()
-    for (const n of nilaiRows as any[]) {
-      const efektif =
-        n.nilai_remedi != null
-          ? Number(n.nilai_remedi)
-          : n.nilai_asli != null
-            ? Number(n.nilai_asli)
-            : null
-      if (efektif == null) continue
-      tertempuhCpmk.add(n.id_cpmk)
-      const kontrib = efektif * (Number(n.bobot_media_asesmen) / 100)
-      nilaiCpmkMap.set(n.id_cpmk, (nilaiCpmkMap.get(n.id_cpmk) ?? 0) + kontrib)
-    }
+    const { data: nilaiCpmkRows } = cpmkIds.length
+      ? await admin.from('v_nilai_cpmk_per_mhs').select('id_cpmk, nilai_cpmk').eq('id_mahasiswa', idMahasiswa).in('id_cpmk', cpmkIds)
+      : { data: [] as { id_cpmk: number; nilai_cpmk: number }[] }
 
-    // Rata-rata nilai CPMK per MK (untuk tampilan nilaiMK di UI)
-    const nilaiMkMap = new Map<number, { sum: number; count: number }>()
-    for (const c of cpmkRows) {
-      if (!tertempuhCpmk.has(c.id_cpmk)) continue
-      const nilai = nilaiCpmkMap.get(c.id_cpmk) ?? 0
-      const cur = nilaiMkMap.get(c.id_mk) ?? { sum: 0, count: 0 }
-      cur.sum += nilai
+    // Retake-safe: rata-ratakan kalau ada >1 baris (beda kelas/semester) utk CPMK yang sama.
+    const cpmkAgg = new Map<number, { sum: number; count: number }>()
+    for (const r of nilaiCpmkRows ?? []) {
+      const cur = cpmkAgg.get(r.id_cpmk) ?? { sum: 0, count: 0 }
+      cur.sum += Number(r.nilai_cpmk)
       cur.count += 1
-      nilaiMkMap.set(c.id_mk, cur)
+      cpmkAgg.set(r.id_cpmk, cur)
     }
+    const tertempuhCpmk = new Set(cpmkAgg.keys())
+    const nilaiCpmkMap = new Map([...cpmkAgg.entries()].map(([id, v]) => [id, v.sum / v.count]))
 
     const cplData: CplDataItem[] = []
     const detailCpl: DetailCplItem[] = []
 
     for (const cpl of cplRows) {
       const iks = ikByCpl.get(cpl.id_cpl) ?? []
-      let nilaiCpl = 0
-      let targetCpl = 0
+      const nilaiCpl = nilaiCplMap.get(cpl.id_cpl) ?? 0
+      const targetCpl = Number(cpl.target_minimal)
       let adaTertempuh = false
-      const ikList: IkItem[] = []
 
-      for (const ik of iks) {
+      const ikList: IkItem[] = iks.map((ik) => {
         const cpmks = cpmkByIk.get(ik.id_ik) ?? []
-        let nilaiIk = 0
-        const cpmkList: CpmkItem[] = []
-
-        for (const c of cpmks) {
-          const nilaiCpmk = nilaiCpmkMap.get(c.id_cpmk) ?? 0
+        const cpmkList: CpmkItem[] = cpmks.map((c) => {
           const tertempuh = tertempuhCpmk.has(c.id_cpmk)
           if (tertempuh) adaTertempuh = true
-          nilaiIk += nilaiCpmk * (Number(c.bobot_cpmk_persen) / 100)
-
-          const mkAgg = nilaiMkMap.get(c.id_mk)
-          const nilaiMK = mkAgg ? mkAgg.sum / mkAgg.count : 0
-
-          cpmkList.push({
-            kode: c.kode_cpmk,
-            deskripsi: c.deskripsi_cpmk ?? '',
-            bobot: Number(c.bobot_cpmk_persen),
+          const nilaiCpmk = nilaiCpmkMap.get(c.id_cpmk) ?? 0
+          return {
+            kode: c.cpmk.kode_cpmk,
+            deskripsi: c.cpmk.deskripsi_id,
+            bobot: Number(c.bobot_persen),
             nilai: Number(nilaiCpmk.toFixed(2)),
-            matakuliah: `${c.kode_mk} - ${c.nama_mk}`,
-            semester: String(c.plot_semester ?? '-'),
-            nilaiMK: Number(nilaiMK.toFixed(2)),
-          })
-        }
-
-        const targetIk = targetMap.get(ik.id_ik) ?? 0
-        nilaiCpl += nilaiIk * (Number(ik.bobot_ik_persen) / 100)
-        targetCpl += targetIk * (Number(ik.bobot_ik_persen) / 100)
-
-        ikList.push({
-          kode: ik.kode_ik,
-          deskripsi: ik.deskripsi,
-          bobot: Number(ik.bobot_ik_persen),
-          nilai: Number(nilaiIk.toFixed(2)),
-          cpmk: cpmkList,
+            matakuliah: `${c.cpmk.mata_kuliah.kode_mk} - ${c.cpmk.mata_kuliah.nama_mk}`,
+            nilaiMK: Number(nilaiCpmk.toFixed(2)),
+          }
         })
-      }
+        return {
+          kode: ik.indikator_kinerja.kode_ik,
+          deskripsi: ik.indikator_kinerja.deskripsi,
+          bobot: Number(ik.bobot_persen),
+          nilai: Number((nilaiIkMap.get(ik.id_ik) ?? 0).toFixed(2)),
+          cpmk: cpmkList,
+        }
+      })
 
-      const status: CplDataItem['status'] = !adaTertempuh
+      const status: DetailCplItem['status'] = !adaTertempuh
         ? 'Belum Ditempuh'
         : nilaiCpl >= targetCpl
           ? 'Tercapai'
@@ -213,24 +173,21 @@ export async function GET(req: NextRequest) {
       cplData.push({
         name: cpl.kode_cpl,
         nilai: Number(nilaiCpl.toFixed(2)),
-        target: Number(targetCpl.toFixed(2)),
+        target: targetCpl,
         status,
-        kategori: cpl.kategori ?? '-',
+        kategori: cpl.domain,
       })
-
       detailCpl.push({
         cpl: cpl.kode_cpl,
-        deskripsi: cpl.deskripsi,
+        deskripsi: cpl.deskripsi_id,
         nilai: Number(nilaiCpl.toFixed(2)),
+        target: targetCpl,
         status,
         ik: ikList,
       })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: { cplData, detailCpl },
-    })
+    return NextResponse.json({ success: true, data: { cplData, detailCpl } })
   } catch (err) {
     const authRes = handleAuthError(err)
     if (authRes) return authRes
@@ -240,9 +197,7 @@ export async function GET(req: NextRequest) {
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
         message: 'Gagal memuat data CPL',
-        ...(process.env.NODE_ENV !== 'production' && err instanceof Error
-          ? { detail: err.message }
-          : {}),
+        ...(process.env.NODE_ENV !== 'production' && err instanceof Error ? { detail: err.message } : {}),
       },
       { status: 500 },
     )

@@ -2,19 +2,18 @@
 //
 // GET /api/auth/verify?token=...
 //
-// Flow per role:
-//   - mahasiswa: token valid → return { needs_nim: true, ... } (frontend tampilkan form NIM)
-//   - dosen:     token valid → cek email match staff.email_sso (peran='dosen')
-//                            → kalau match: link user.id_staff + aktivasi
-//                            → kalau tidak match: error NOT_REGISTERED
+// Flow per role (unchanged from before the Supabase migration):
+//   - mahasiswa: token valid -> return { needs_nim: true, ... } (frontend tampilkan form NIM)
+//   - dosen:     token valid -> cek email match staff.email_sso (peran='dosen')
+//                             -> kalau match: link app_user.id_staff + aktivasi
+//                             -> kalau tidak match: error NOT_REGISTERED
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/app/lib/db'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 
 export async function GET(req: NextRequest) {
   try {
     const token = req.nextUrl.searchParams.get('token')
-
     if (!token) {
       return NextResponse.json(
         { success: false, error: 'MISSING_TOKEN', message: 'Token verifikasi tidak ada di URL.' },
@@ -22,75 +21,68 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const db = getDb()
-    const [rows] = await db.query<any[]>(
-      `SELECT id_user, email, role, status, nama_input, token_expires_at
-       FROM user
-       WHERE token_verifikasi = ?
-       LIMIT 1`,
-      [token],
-    )
+    const admin = createSupabaseAdminClient()
+    const { data: profile } = await admin
+      .from('app_user')
+      .select('id_user, email, role, status, nama_input, token_expires_at')
+      .eq('token_verifikasi', token)
+      .maybeSingle<{
+        id_user: number
+        email: string
+        role: string
+        status: string
+        nama_input: string | null
+        token_expires_at: string | null
+      }>()
 
-    const user = (rows as any[])[0]
-    if (!user) {
+    if (!profile) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'INVALID_TOKEN',
-          message: 'Link verifikasi tidak valid atau sudah pernah dipakai.',
-        },
+        { success: false, error: 'INVALID_TOKEN', message: 'Link verifikasi tidak valid atau sudah pernah dipakai.' },
         { status: 400 },
       )
     }
 
-    // Cek expired
-    if (user.token_expires_at && new Date(user.token_expires_at) < new Date()) {
+    if (profile.token_expires_at && new Date(profile.token_expires_at) < new Date()) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'TOKEN_EXPIRED',
-          message: 'Link verifikasi sudah kedaluwarsa. Silakan daftar ulang.',
-        },
+        { success: false, error: 'TOKEN_EXPIRED', message: 'Link verifikasi sudah kedaluwarsa. Silakan daftar ulang.' },
         { status: 400 },
       )
     }
 
-    if (user.status === 'aktif') {
+    if (profile.status === 'aktif') {
       return NextResponse.json({
         success: true,
         data: {
           already_verified: true,
-          role: user.role,
-          email: user.email,
+          role: profile.role,
+          email: profile.email,
           message: 'Akun sudah diverifikasi sebelumnya. Silakan login.',
         },
       })
     }
 
     // ─── MAHASISWA: butuh isi NIM dulu ───────────────
-    if (user.role === 'mahasiswa') {
+    if (profile.role === 'mahasiswa') {
       return NextResponse.json({
         success: true,
         data: {
           needs_nim: true,
           role: 'mahasiswa',
-          email: user.email,
-          nama: user.nama_input,
-          token, // dikirim balik ke frontend untuk POST /complete-mahasiswa
+          email: profile.email,
+          nama: profile.nama_input,
+          token,
         },
       })
     }
 
     // ─── DOSEN: cek di tabel staff ───────────────────
-    if (user.role === 'dosen') {
-      const [staffRows] = await db.query<any[]>(
-        `SELECT id_staff, nama_lengkap, nip_nidn_nik
-         FROM staff
-         WHERE email_sso = ? AND peran = 'dosen'
-         LIMIT 1`,
-        [user.email],
-      )
-      const staff = (staffRows as any[])[0]
+    if (profile.role === 'dosen') {
+      const { data: staff } = await admin
+        .from('staff')
+        .select('id_staff, nama_lengkap, nip_nidn_nik')
+        .eq('email_sso', profile.email)
+        .eq('peran', 'dosen')
+        .maybeSingle<{ id_staff: number; nama_lengkap: string; nip_nidn_nik: string }>()
 
       if (!staff) {
         return NextResponse.json(
@@ -104,37 +96,37 @@ export async function GET(req: NextRequest) {
         )
       }
 
-      // Cek apakah staff ini sudah di-link ke user lain
-      const [linkedRows] = await db.query<any[]>(
-        `SELECT id_user FROM user WHERE id_staff = ? AND id_user <> ? LIMIT 1`,
-        [staff.id_staff, user.id_user],
-      )
-      if ((linkedRows as any[]).length > 0) {
+      const { data: linked } = await admin
+        .from('app_user')
+        .select('id_user')
+        .eq('id_staff', staff.id_staff)
+        .neq('id_user', profile.id_user)
+        .maybeSingle()
+
+      if (linked) {
         return NextResponse.json(
-          {
-            success: false,
-            error: 'STAFF_TAKEN',
-            message: 'Akun dosen ini sudah dipakai oleh user lain. Hubungi admin.',
-          },
+          { success: false, error: 'STAFF_TAKEN', message: 'Akun dosen ini sudah dipakai oleh user lain. Hubungi admin.' },
           { status: 409 },
         )
       }
 
-      // Link & aktivasi
-      await db.query(
-        `UPDATE user
-         SET id_staff = ?, status = 'aktif', verified_at = NOW(),
-             token_verifikasi = NULL, token_expires_at = NULL
-         WHERE id_user = ?`,
-        [staff.id_staff, user.id_user],
-      )
+      await admin
+        .from('app_user')
+        .update({
+          id_staff: staff.id_staff,
+          status: 'aktif',
+          verified_at: new Date().toISOString(),
+          token_verifikasi: null,
+          token_expires_at: null,
+        })
+        .eq('id_user', profile.id_user)
 
       return NextResponse.json({
         success: true,
         data: {
           verified: true,
           role: 'dosen',
-          email: user.email,
+          email: profile.email,
           nama: staff.nama_lengkap,
           nip: staff.nip_nidn_nik,
           message: 'Verifikasi berhasil. Silakan login.',
@@ -142,10 +134,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return NextResponse.json(
-      { success: false, error: 'INVALID_ROLE', message: 'Role tidak dikenali.' },
-      { status: 400 },
-    )
+    return NextResponse.json({ success: false, error: 'INVALID_ROLE', message: 'Role tidak dikenali.' }, { status: 400 })
   } catch (err: any) {
     console.error('[GET /api/auth/verify]', err)
     return NextResponse.json(

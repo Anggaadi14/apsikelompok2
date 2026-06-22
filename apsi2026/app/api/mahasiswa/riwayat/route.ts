@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDb } from '@/app/lib/db'
+import { createSupabaseAdminClient } from '@/app/lib/supabase/admin'
 import { handleAuthError, requireRole } from '@/app/lib/auth'
 import { nilaiKeHuruf } from '@/app/lib/grading'
 
@@ -19,61 +19,67 @@ interface RiwayatNilaiItem {
   huruf: string
 }
 
+type Row = {
+  nilai_asli: number | null
+  nilai_remedi: number | null
+  id_kelas: number
+  komponen_nilai: {
+    kode_media: string
+    bobot_terhadap_mk: number
+    mata_kuliah: { id_mata_kuliah: number; kode_mk: string; nama_mk: string; sks: number }
+  }
+  kelas: { tahun_akademik: string; semester: string }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireRole(req, ['mahasiswa'])
-    const idMahasiswa = session.id
-    const db = getDb()
+    const idMahasiswa = session.id_mahasiswa
+    if (!idMahasiswa) {
+      return NextResponse.json({ success: true, data: [] })
+    }
 
-    const [rows] = await db.execute(
-      `SELECT 
-        nd.id_komponen, nd.nilai_asli, nd.nilai_remedi,
-        nd.tahun_akademik, nd.semester,
-        kn.nama_komponen, kn.bobot_non_cpmk,
-        mk.id_mk, mk.kode_mk, mk.nama_mk, mk.sks
-       FROM nilai_detail nd
-       JOIN komponen_nilai kn ON kn.id_komponen = nd.id_komponen
-       JOIN mata_kuliah mk ON mk.id_mk = kn.id_mk
-       WHERE nd.id_mahasiswa = ?
-       ORDER BY nd.tahun_akademik, nd.semester, mk.kode_mk, kn.id_komponen`,
-      [idMahasiswa],
-    )
+    const admin = createSupabaseAdminClient()
+    const { data, error } = await admin
+      .from('nilai_detail')
+      .select(
+        `nilai_asli, nilai_remedi, id_kelas,
+         komponen_nilai:id_komponen (
+           kode_media, bobot_terhadap_mk,
+           mata_kuliah:id_mata_kuliah ( id_mata_kuliah, kode_mk, nama_mk, sks )
+         ),
+         kelas:kelas_mk ( tahun_akademik, semester )`,
+      )
+      .eq('id_mahasiswa', idMahasiswa)
+    if (error) throw error
 
     interface Bucket {
       semester: string
       tahun: string
       mk: { id: number; kode: string; nama: string; sks: number }
-      komponen: Array<{ nama: string; bobot: number; efektif: number | null }>
+      komponen: Array<{ kode_media: string; bobot: number; efektif: number | null }>
     }
     const buckets = new Map<string, Bucket>()
 
-    for (const r of rows as any[]) {
-      const key = `${r.tahun_akademik}::${r.semester}::${r.id_mk}`
+    for (const r of (data ?? []) as unknown as Row[]) {
+      const mk = r.komponen_nilai?.mata_kuliah
+      if (!mk || !r.kelas) continue
+      const key = `${r.kelas.tahun_akademik}::${r.kelas.semester}::${mk.id_mata_kuliah}`
       let b = buckets.get(key)
       if (!b) {
         b = {
-          semester: r.semester,
-          tahun: r.tahun_akademik,
-          mk: {
-            id: r.id_mk,
-            kode: r.kode_mk,
-            nama: r.nama_mk,
-            sks: Number(r.sks),
-          },
+          semester: r.kelas.semester,
+          tahun: r.kelas.tahun_akademik,
+          mk: { id: mk.id_mata_kuliah, kode: mk.kode_mk, nama: mk.nama_mk, sks: Number(mk.sks) },
           komponen: [],
         }
         buckets.set(key, b)
       }
-      const efektif =
-        r.nilai_remedi != null
-          ? Number(r.nilai_remedi)
-          : r.nilai_asli != null
-            ? Number(r.nilai_asli)
-            : null
+      const efektif = r.nilai_remedi ?? r.nilai_asli
       b.komponen.push({
-        nama: r.nama_komponen,
-        bobot: Number(r.bobot_non_cpmk),
-        efektif,
+        kode_media: r.komponen_nilai.kode_media,
+        bobot: Number(r.komponen_nilai.bobot_terhadap_mk),
+        efektif: efektif != null ? Number(efektif) : null,
       })
     }
 
@@ -87,10 +93,7 @@ export async function GET(req: NextRequest) {
       const skala100 = Number(nilaiAkhir.toFixed(2))
       const { huruf } = nilaiKeHuruf(skala100)
 
-      const ukSlots: Array<number | null> = [null, null, null, null, null]
-      b.komponen.slice(0, 5).forEach((k, i) => {
-        ukSlots[i] = k.efektif
-      })
+      const ukByKode = new Map(b.komponen.map((k) => [k.kode_media, k.efektif]))
 
       items.push({
         no: no++,
@@ -98,11 +101,11 @@ export async function GET(req: NextRequest) {
         kode: b.mk.kode,
         nama: b.mk.nama,
         sks: b.mk.sks,
-        uk1: ukSlots[0],
-        uk2: ukSlots[1],
-        uk3: ukSlots[2],
-        uk4: ukSlots[3],
-        uk5: ukSlots[4],
+        uk1: ukByKode.get('UK1') ?? null,
+        uk2: ukByKode.get('UK2') ?? null,
+        uk3: ukByKode.get('UK3') ?? null,
+        uk4: ukByKode.get('UK4') ?? null,
+        uk5: ukByKode.get('UK5') ?? null,
         nilaiAkhir: skala100,
         skala100,
         huruf,
@@ -119,9 +122,7 @@ export async function GET(req: NextRequest) {
         success: false,
         error: 'INTERNAL_SERVER_ERROR',
         message: 'Gagal memuat data riwayat nilai',
-        ...(process.env.NODE_ENV !== 'production' && err instanceof Error
-          ? { detail: err.message }
-          : {}),
+        ...(process.env.NODE_ENV !== 'production' && err instanceof Error ? { detail: err.message } : {}),
       },
       { status: 500 },
     )

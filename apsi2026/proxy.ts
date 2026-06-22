@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
 /**
- * IP Whitelist Middleware
+ * Proxy (formerly Middleware — renamed in Next.js 16, same behavior)
  *
- * Behavior:
- * - Skip jika BYPASS_IP_CHECK=true (untuk dev/test)
- * - Allow jika IP klien match daftar di ALLOWED_IPS (comma-separated)
- * - Support CIDR notation (mis. 10.0.0.0/8) untuk subnet kampus
- * - Skip static assets & internal Next.js routes
- * - Reject dengan 403 JSON response
+ * Two responsibilities, run on every request:
+ * 1. Refresh the Supabase Auth session cookie (access tokens expire ~1h;
+ *    this keeps users logged in via the refresh token without each Route
+ *    Handler needing to do it individually).
+ * 2. IP Whitelist — unchanged from before the Supabase migration.
+ *    - Skip jika BYPASS_IP_CHECK=true (untuk dev/test)
+ *    - Allow jika IP klien match daftar di ALLOWED_IPS (comma-separated)
+ *    - Support CIDR notation (mis. 10.0.0.0/8) untuk subnet kampus
+ *    - Skip static assets & internal Next.js routes
+ *    - Reject dengan 403 JSON/HTML response
  */
 
 const BYPASS = process.env.BYPASS_IP_CHECK === 'true'
@@ -64,34 +69,15 @@ function isAllowed(clientIp: string): boolean {
 }
 
 function getClientIp(req: NextRequest): string {
-  // Order: x-forwarded-for (first), x-real-ip, x-vercel-forwarded-for, then req.ip
   const xff = req.headers.get('x-forwarded-for')
   if (xff) return xff.split(',')[0].trim()
   const xri = req.headers.get('x-real-ip')
   if (xri) return xri.trim()
-  // Next.js 16: req.ip tidak ada di Edge. Pakai socket info kalau ada.
   return '0.0.0.0'
 }
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl
-
-  // Skip assets & internal paths
-  for (const skip of SKIP_PATHS) {
-    if (pathname.startsWith(skip)) return NextResponse.next()
-  }
-
-  // Bypass mode (dev only)
-  if (BYPASS) return NextResponse.next()
-
-  const clientIp = getClientIp(req)
-  if (isAllowed(clientIp)) {
-    return NextResponse.next()
-  }
-
-  // Reject dengan 403
-  // Untuk API route → return JSON. Untuk halaman → return halaman HTML simple.
-  const isApi = pathname.startsWith('/api/')
+function rejectResponse(req: NextRequest, clientIp: string): NextResponse {
+  const isApi = req.nextUrl.pathname.startsWith('/api/')
   if (isApi) {
     return NextResponse.json(
       {
@@ -123,7 +109,49 @@ export function middleware(req: NextRequest) {
   )
 }
 
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Skip assets & internal paths entirely (no session refresh needed either)
+  for (const skip of SKIP_PATHS) {
+    if (pathname.startsWith(skip)) return NextResponse.next()
+  }
+
+  // ── 1. Refresh Supabase session cookie ────────────────────────────────
+  let response = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          )
+        },
+      },
+    },
+  )
+
+  // Do not add logic between createServerClient and getUser() — this call
+  // is what actually refreshes the token if it's expired.
+  await supabase.auth.getUser()
+
+  // ── 2. IP whitelist ────────────────────────────────────────────────────
+  if (BYPASS) return response
+
+  const clientIp = getClientIp(request)
+  if (isAllowed(clientIp)) return response
+
+  return rejectResponse(request, clientIp)
+}
+
 export const config = {
-  // Jalanin middleware di semua route kecuali static assets
   matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
 }
