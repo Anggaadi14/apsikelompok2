@@ -41,22 +41,6 @@ export interface MataKuliahItem {
   nilaiAngka: number;
 }
 
-export interface RiwayatNilaiItem {
-  no: number;
-  semester: number;
-  kode: string;
-  nama: string;
-  sks: number;
-  uk1: number;
-  uk2: number;
-  uk3: number;
-  uk4: number;
-  uk5: number;
-  nilaiAkhir: number;
-  skala100: number;
-  huruf: string;
-}
-
 export const cplData: CplDataItem[] = [
   { name: 'CPL-1', nilai: 85, target: 80, status: 'Tercapai', kategori: 'Pengetahuan' },
   { name: 'CPL-2', nilai: 78, target: 80, status: 'Belum Tercapai', kategori: 'Keterampilan Khusus' },
@@ -193,26 +177,4 @@ export const mataKuliahData: MataKuliahItem[] = [
   { semester: 'Semester 5', kode: 'TI-301', nama: 'Sistem Produksi', sks: 3, nilai: 'A', nilaiAngka: 88 },
   { semester: 'Semester 5', kode: 'TI-305', nama: 'Ergonomi', sks: 3, nilai: 'B+', nilaiAngka: 82 },
   { semester: 'Semester 5', kode: 'TI-308', nama: 'Pengendalian Kualitas', sks: 3, nilai: 'A-', nilaiAngka: 85 },
-];
-
-export const riwayatNilaiData: RiwayatNilaiItem[] = [
-  { no: 1, semester: 1, kode: 'BIO3303', nama: 'Fisika Teknik Industri', sks: 2, uk1: 0, uk2: 50, uk3: 50, uk4: 0, uk5: 0, nilaiAkhir: 71.9, skala100: 71.9, huruf: 'B' },
-  { no: 2, semester: 1, kode: 'BIO3304', nama: 'Praktikum Fisika Industri', sks: 1, uk1: 0, uk2: 45, uk3: 45, uk4: 0, uk5: 0, nilaiAkhir: 67.6, skala100: 67.6, huruf: 'B' },
-  { no: 3, semester: 1, kode: 'BIO3305', nama: 'Kimia Dasar', sks: 2, uk1: 0, uk2: 55, uk3: 55, uk4: 0, uk5: 0, nilaiAkhir: 84.1, skala100: 84.1, huruf: 'A-' },
-  { no: 4, semester: 1, kode: 'BIO3306', nama: 'Praktikum Kimia Dasar', sks: 1, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 89.2, skala100: 89.2, huruf: 'A' },
-  { no: 5, semester: 2, kode: 'TI03001', nama: 'KALKULUS', sks: 3, uk1: 0, uk2: 52, uk3: 52, uk4: 0, uk5: 0, nilaiAkhir: 80.2, skala100: 80.2, huruf: 'B+' },
-  { no: 6, semester: 2, kode: 'TI03002', nama: 'STATISTIKA DASAR', sks: 3, uk1: 0, uk2: 58, uk3: 58, uk4: 0, uk5: 0, nilaiAkhir: 88.1, skala100: 88.1, huruf: 'B+' },
-  { no: 7, semester: 2, kode: 'TI03003', nama: 'GAMBAR TEKNIK', sks: 2, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90.37, skala100: 90.37, huruf: 'A-' },
-  { no: 8, semester: 3, kode: 'TI03004', nama: 'ILMU BAHAN TEKNIK', sks: 2, uk1: 0, uk2: 52, uk3: 52, uk4: 0, uk5: 0, nilaiAkhir: 80, skala100: 80, huruf: 'B+' },
-  { no: 9, semester: 3, kode: 'TI03005', nama: 'MEKANIKA TEKNIK', sks: 3, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90, skala100: 90, huruf: 'A' },
-  { no: 10, semester: 3, kode: 'TI03006', nama: 'PEMROGRAMAN KOMPUTER (MATLAB/PYTHON)', sks: 2, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90, skala100: 90, huruf: 'A' },
-  { no: 11, semester: 3, kode: 'TI03007', nama: 'STATISTIKA INDUSTRI 1', sks: 3, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90, skala100: 90, huruf: 'A' },
-  { no: 12, semester: 4, kode: 'TI03008', nama: 'SISTEM INFORMASI PERUSAHAAN TERINTEGRASI', sks: 2, uk1: 0, uk2: 52, uk3: 52, uk4: 0, uk5: 0, nilaiAkhir: 80, skala100: 80, huruf: 'B+' },
-  { no: 13, semester: 4, kode: 'TI03009', nama: 'SISTEM MANAJEMEN KUALITAS INDUSTRI', sks: 3, uk1: 0, uk2: 55, uk3: 55, uk4: 0, uk5: 0, nilaiAkhir: 85, skala100: 85, huruf: 'A-' },
-  { no: 14, semester: 4, kode: 'TI03010', nama: 'ELEMEN MESIN', sks: 2, uk1: 0, uk2: 48, uk3: 48, uk4: 0, uk5: 0, nilaiAkhir: 75, skala100: 75, huruf: 'B' },
-  { no: 15, semester: 4, kode: 'TI03011', nama: 'PERANCANGAN SISTEM KERJA & ERGONOMI', sks: 3, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90, skala100: 90, huruf: 'A' },
-  { no: 16, semester: 5, kode: 'TI03012', nama: 'OTOMASI SISTEM PRODUKSI', sks: 2, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 90, skala100: 90, huruf: 'A' },
-  { no: 17, semester: 5, kode: 'TI-301', nama: 'Sistem Produksi', sks: 3, uk1: 0, uk2: 60, uk3: 60, uk4: 0, uk5: 0, nilaiAkhir: 88, skala100: 88, huruf: 'A' },
-  { no: 18, semester: 5, kode: 'TI-305', nama: 'Ergonomi', sks: 3, uk1: 0, uk2: 54, uk3: 54, uk4: 0, uk5: 0, nilaiAkhir: 82, skala100: 82, huruf: 'B+' },
-  { no: 19, semester: 5, kode: 'TI-308', nama: 'Pengendalian Kualitas', sks: 3, uk1: 0, uk2: 56, uk3: 56, uk4: 0, uk5: 0, nilaiAkhir: 85, skala100: 85, huruf: 'A-' },
 ];

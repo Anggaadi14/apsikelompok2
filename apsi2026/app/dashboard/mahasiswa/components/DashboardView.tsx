@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, XCircle, MinusCircle, TrendingUp } from 'lucide-react';
+import { CheckCircle, XCircle, MinusCircle } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,7 +15,7 @@ import { CplDataItem } from '../data';
 
 interface DashboardViewProps {
   cplData: CplDataItem[];
-  setActiveTab: (tab: 'dashboard' | 'cpl' | 'riwayat') => void;
+  setActiveTab: (tab: 'dashboard' | 'cpl') => void;
 }
 
 export default function DashboardView({ cplData, setActiveTab }: DashboardViewProps) {
@@ -23,15 +23,10 @@ export default function DashboardView({ cplData, setActiveTab }: DashboardViewPr
   const belumTercapaiCount = cplData.filter((c) => c.status === 'Belum Tercapai').length;
   const belumDitempuhCount = cplData.filter((c) => c.status === 'Belum Ditempuh').length;
   
-  const validCplData = cplData.filter((c) => c.nilai > 0);
-  const averageCpl = validCplData.length > 0 
-    ? Math.round(validCplData.reduce((acc, c) => acc + c.nilai, 0) / validCplData.length)
-    : 0;
-
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Card 1: Tercapai */}
         <div className="bg-white p-6 rounded-xl shadow border border-gray-200 hover:shadow-md transition">
           <div className="flex items-center justify-between">
@@ -77,20 +72,6 @@ export default function DashboardView({ cplData, setActiveTab }: DashboardViewPr
             </div>
           </div>
           <p className="text-xs font-semibold text-gray-500 mt-3">Mata kuliah belum diambil</p>
-        </div>
-
-        {/* Card 4: Rata-rata CPL */}
-        <div className="bg-white p-6 rounded-xl shadow border border-gray-200 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Rata-rata CPL</p>
-              <p className="text-3xl font-extrabold text-slate-800 mt-1">{averageCpl}</p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center shadow-inner shrink-0">
-              <TrendingUp className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-          <p className="text-xs font-semibold text-gray-500 mt-3">Target kompetensi minimum: 80</p>
         </div>
       </div>
 

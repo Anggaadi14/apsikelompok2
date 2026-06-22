@@ -2,14 +2,14 @@
 // app/dashboard/mahasiswa/page.tsx
 //
 // PERUBAHAN dari Tahap 2:
-//   - cplData, detailCPL, riwayatNilaiData TIDAK lagi dari data.ts
-//   - Ketiganya sekarang di-fetch dari API:
-//       GET /api/mahasiswa/cpl     → cplData + detailCpl
-//       GET /api/mahasiswa/riwayat → riwayatNilaiData
+//   - cplData, detailCPL TIDAK lagi dari data.ts
+//   - Keduanya sekarang di-fetch dari API:
+//       GET /api/mahasiswa/cpl → cplData + detailCpl
 //   - data.ts tetap ada sebagai fallback jika API gagal (development safety)
-//   - Loading state per tab (dashboard, cpl, riwayat) ditambahkan
+//   - Loading state per tab (dashboard, cpl) ditambahkan
 //   - <CplView /> sekarang menerima prop `profile` agar kartu profil di tab
 //     Report tidak lagi hardcode "Ahmad Fadli / 3.75".
+//   - Tab "Riwayat Nilai" dihapus (sudah tercover di tab Detail CPL).
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -18,16 +18,14 @@ import Sidebar from '../../components/Sidebar';
 import ProfileCard from './components/ProfileCard';
 import DashboardView from './components/DashboardView';
 import CplView from './components/CplView';
-import RiwayatView from './components/RiwayatView';
 // Fallback jika API gagal (hanya untuk development)
 import {
   cplData as cplDataFallback,
   detailCPL as detailCPLFallback,
-  riwayatNilaiData as riwayatFallback,
 } from './data';
-import { Home, Award, BookOpen } from 'lucide-react';
+import { Home, Award } from 'lucide-react';
 import { UserSession } from '../../data/users';
-import { CplDataItem, DetailCplItem, RiwayatNilaiItem } from './data';
+import { CplDataItem, DetailCplItem } from './data';
 
 // ─────────────────────────────────────────────
 // Tipe data dari API
@@ -74,7 +72,7 @@ export default function MahasiswaDashboard() {
   const router = useRouter();
 
   // State: navigasi
-  const [activeTab, setActiveTab]               = useState<'dashboard' | 'cpl' | 'riwayat'>('dashboard');
+  const [activeTab, setActiveTab]               = useState<'dashboard' | 'cpl'>('dashboard');
   const [selectedSemester, setSelectedSemester] = useState('Ganjil 2024/2025');
 
   // State: session
@@ -93,11 +91,6 @@ export default function MahasiswaDashboard() {
   const [detailCpl, setDetailCpl]               = useState<DetailCplItem[]>(detailCPLFallback);
   const [cplLoading, setCplLoading]             = useState(false);
   const [cplError, setCplError]                 = useState<string | null>(null);
-
-  // State: riwayat nilai (BARU di Tahap 3)
-  const [riwayatData, setRiwayatData]           = useState<RiwayatNilaiItem[]>(riwayatFallback);
-  const [riwayatLoading, setRiwayatLoading]     = useState(false);
-  const [riwayatError, setRiwayatError]         = useState<string | null>(null);
 
   // ── Auth Guard ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -194,28 +187,9 @@ export default function MahasiswaDashboard() {
       }
     };
 
-    // Riwayat nilai (BARU Tahap 3)
-    const loadRiwayat = async () => {
-      setRiwayatLoading(true);
-      setRiwayatError(null);
-      try {
-        const result = await fetchWithSession('/api/mahasiswa/riwayat');
-        if (result.success && result.data?.length > 0) {
-          setRiwayatData(result.data as RiwayatNilaiItem[]);
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Gagal memuat riwayat nilai';
-        setRiwayatError(msg);
-        console.error('[Dashboard] fetch riwayat error — pakai fallback data.ts:', err);
-      } finally {
-        setRiwayatLoading(false);
-      }
-    };
-
     loadProfile();
     loadSemesters();
     loadCpl();
-    loadRiwayat();
   }, [sessionUser, fetchWithSession]);
 
   // ── Handlers ───────────────────────────────────────────────────────────
@@ -224,7 +198,10 @@ export default function MahasiswaDashboard() {
     router.push('/');
   };
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
     const displayName  = profile?.nama_mahasiswa ?? sessionUser?.name ?? '-';
     const displayNim   = profile?.nim             ?? sessionUser?.identifier ?? '-';
     const displayIpk   = profile?.ipk             ?? 0;
@@ -238,56 +215,116 @@ export default function MahasiswaDashboard() {
       ? (nilaiValid.reduce((s, c) => s + c.nilai, 0) / nilaiValid.length).toFixed(1)
       : '0.0';
 
-    const reportContent = `SICPL - PORTAL MAHASISWA
-=========================
-Laporan Capaian Pembelajaran Lulusan (CPL)
-Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 14;
 
-Mahasiswa       : ${displayName}
-NIM             : ${displayNim}
-Program Studi   : ${displayProdi}
-IPK Kumulatif   : ${displayIpk}
-Semester Aktif  : ${selectedSemester}
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SICPL - Portal Mahasiswa', marginX, 16);
+    doc.setFontSize(11);
+    doc.text('Laporan Capaian Pembelajaran Lulusan (CPL)', marginX, 23);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(
+      `Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+      marginX,
+      29,
+    );
 
-======================================
-Ringkasan Capaian CPL
-======================================
-CPL Tercapai (≥80) : ${tercapaiCount} dari ${cplData.length}
-CPL Belum Tercapai : ${belumTercapai}
-CPL Belum Ditempuh : ${belumDitempuh}
-Rata-rata Nilai CPL: ${avgCpl}
-Target Minimum     : 80
+    doc.setFontSize(10);
+    const profileLines = [
+      `Mahasiswa      : ${displayName}`,
+      `NIM            : ${displayNim}`,
+      `Program Studi  : ${displayProdi}`,
+      `IPK Kumulatif  : ${displayIpk}`,
+      `Semester Aktif : ${selectedSemester}`,
+    ];
+    profileLines.forEach((line, i) => doc.text(line, marginX, 38 + i * 5.5));
 
-======================================
-Rincian Nilai CPL
-======================================
-${cplData.map((c) =>
-  `${c.name.padEnd(7)} | ${c.nilai > 0 ? c.nilai.toString().padStart(5) : '  -  '} | ${c.status.toUpperCase().padEnd(17)} | ${c.kategori}`
-).join('\n')}
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      `Tercapai: ${tercapaiCount}/${cplData.length}   ·   Belum Tercapai: ${belumTercapai}   ·   Belum Ditempuh: ${belumDitempuh}   ·   Rata-rata CPL: ${avgCpl}`,
+      marginX,
+      68,
+    );
+    doc.setFont('helvetica', 'normal');
 
-======================================
-Catatan:
-Nilai CPL dihitung dari kontribusi CPMK melalui Indikator Kinerja (IK)
-sesuai kurikulum OBE Prodi Teknik Industri UNS.
-======================================
-`;
+    autoTable(doc, {
+      startY: 73,
+      margin: { left: marginX, right: marginX },
+      head: [['No', 'CPL', 'Deskripsi', 'Kategori', 'Nilai', 'Target', 'Status']],
+      body: cplData.map((c, idx) => {
+        const description =
+          detailCpl.find((d) => d.cpl === c.name)?.deskripsi ??
+          'Mampu menerapkan kompetensi rekayasa tingkat lanjut di bidang teknik industri';
+        return [idx + 1, c.name, description, c.kategori, c.nilai > 0 ? c.nilai : '-', c.target, c.status];
+      }),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [79, 70, 229] },
+      columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 16 }, 4: { cellWidth: 14 }, 5: { cellWidth: 14 } },
+    });
 
-    const blob = new Blob([reportContent], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href     = url;
-    link.download = `Laporan_CPL_${displayNim}_${displayName.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    let cursorY = (doc as any).lastAutoTable.finalY + 10;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detail Pembentuk Nilai CPL', marginX, cursorY);
+    cursorY += 6;
+    doc.setFont('helvetica', 'normal');
+
+    for (const item of detailCpl) {
+      if (cursorY > pageHeight - 40) {
+        doc.addPage();
+        cursorY = 16;
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${item.cpl} — ${item.status} (${item.nilai > 0 ? item.nilai.toFixed(1) : '-'})`, marginX, cursorY);
+      doc.setFont('helvetica', 'normal');
+      cursorY += 5;
+
+      const rows: (string | number)[][] = [];
+      for (const ikItem of item.ik) {
+        ikItem.cpmk.forEach((c, idx) => {
+          rows.push([
+            idx === 0 ? `${ikItem.kode} (${ikItem.bobot}%)` : '',
+            c.kode,
+            c.matakuliah,
+            c.semester || '-',
+            c.nilaiMK,
+          ]);
+        });
+      }
+
+      if (rows.length === 0) {
+        doc.setFontSize(9);
+        doc.text('Belum ada IK/CPMK pembentuk.', marginX, cursorY);
+        cursorY += 8;
+        continue;
+      }
+
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [['IK/PI', 'CPMK', 'Mata Kuliah', 'Smt', 'Nilai']],
+        body: rows,
+        styles: { fontSize: 8, cellPadding: 1.8 },
+        headStyles: { fillColor: [99, 102, 241] },
+        columnStyles: { 3: { cellWidth: 10 }, 4: { cellWidth: 14 } },
+      });
+      cursorY = (doc as any).lastAutoTable.finalY + 8;
+    }
+
+    doc.save(`Laporan_CPL_${displayNim}_${String(displayName).replace(/\s+/g, '_')}.pdf`);
   };
 
   // Sidebar items
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard',     icon: <Home     className="w-5 h-5" /> },
-    { id: 'cpl',       label: 'Detail CPL',    icon: <Award    className="w-5 h-5" /> },
-    { id: 'riwayat',   label: 'Riwayat Nilai', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'dashboard', label: 'Dashboard',  icon: <Home  className="w-5 h-5" /> },
+    { id: 'cpl',       label: 'Detail CPL', icon: <Award className="w-5 h-5" /> },
   ];
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -340,16 +377,6 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
             </div>
           )}
 
-          {/* Error banner riwayat */}
-          {riwayatError && (
-            <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
-              ⚠️ Riwayat nilai diambil dari sumber fallback (data.ts).
-              {process.env.NODE_ENV === 'development' && (
-                <span className="ml-1 text-orange-500">({riwayatError})</span>
-              )}
-            </div>
-          )}
-
           {/* ProfileCard */}
           <ProfileCard
             name={profile?.nama_mahasiswa ?? sessionUser.name}
@@ -377,11 +404,6 @@ sesuai kurikulum OBE Prodi Teknik Industri UNS.
               cplLoading
                 ? <TabLoading message="Memuat detail IK dan CPMK..." />
                 : <CplView cplData={cplData} detailCplData={detailCpl} profile={cplProfile} />
-            )}
-            {activeTab === 'riwayat' && (
-              riwayatLoading
-                ? <TabLoading message="Memuat transkrip nilai..." />
-                : <RiwayatView riwayatNilaiData={riwayatData} />
             )}
           </div>
         </main>

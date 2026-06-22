@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { FileText, Plus, Eye, CheckCircle, XCircle, Edit2, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle, XCircle, Edit2, AlertCircle } from 'lucide-react';
 
 interface WordingProposal {
   id: string;
+  id_usulan: number;
   type: 'CPL' | 'IK' | 'CPMK';
   code: string;
   currentWording: string;
@@ -14,75 +15,88 @@ interface WordingProposal {
   notes: string;
 }
 
-export default function WordingReviewView() {
-  const [proposals, setProposals] = useState<WordingProposal[]>([
-    {
-      id: 'WPR-001',
-      type: 'CPL',
-      code: 'CPL-03',
-      currentWording: 'Mampu merancang sistem industri dengan baik.',
-      proposedWording: 'Mampu merancang sistem terintegrasi yang mencakup manusia, material, informasi, peralatan, dan energi menggunakan metodologi rekayasa sistem.',
-      bloomLevel: 'C6 (Creating)',
-      status: 'Pending',
-      notes: 'Kata "dengan baik" tidak terukur. Wording baru disesuaikan agar memenuhi Bloom Taxonomy C6 yang dapat diukur rubriknya.',
-    },
-    {
-      id: 'WPR-002',
-      type: 'IK',
-      code: 'IK-03.2',
-      currentWording: 'Mengerti cara analisis data presentasi.',
-      proposedWording: 'Menganalisis data kuantitatif menggunakan metode statistika inferensial untuk memecahkan masalah rekayasa industri.',
-      bloomLevel: 'C4 (Analyzing)',
-      status: 'Approved',
-      notes: 'Mengubah kata kerja pasif "mengerti" menjadi kata kerja operasional terukur "menganalisis".',
-    },
-    {
-      id: 'WPR-003',
-      type: 'CPMK',
-      code: 'CPMK-Fisika II',
-      currentWording: 'Mahasiswa mengetahui prinsip gelombang elektromagnetik.',
-      proposedWording: 'Memformulasikan solusi persamaan gelombang elektromagnetik dalam medium dielektrik.',
-      bloomLevel: 'C5 (Evaluating)',
-      status: 'Rejected',
-      notes: 'Rumusan wording terlalu spesifik untuk tingkat dasar, ditolak agar diselaraskan kembali di rapat kurikulum.',
-    },
-  ]);
+function authHeaders(): Record<string, string> {
+  const raw = sessionStorage.getItem('currentUser');
+  return { 'Content-Type': 'application/json', ...(raw ? { 'x-user-session': raw } : {}) };
+}
 
+export default function WordingReviewView() {
+  const [proposals, setProposals] = useState<WordingProposal[]>([]);
   const [newType, setNewType] = useState<'CPL' | 'IK' | 'CPMK'>('CPL');
   const [newCode, setNewCode] = useState('');
   const [newCurrent, setNewCurrent] = useState('');
   const [newProposed, setNewProposed] = useState('');
   const [newBloom, setNewBloom] = useState('C4 (Analyzing)');
   const [newNotes, setNewNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleCreateProposal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCode || !newProposed) return;
-
-    const newProp: WordingProposal = {
-      id: `WPR-00${proposals.length + 1}`,
-      type: newType,
-      code: newCode,
-      currentWording: newCurrent,
-      proposedWording: newProposed,
-      bloomLevel: newBloom,
-      status: 'Pending',
-      notes: newNotes,
-    };
-
-    setProposals([newProp, ...proposals]);
-    setNewCode('');
-    setNewCurrent('');
-    setNewProposed('');
-    setNewNotes('');
+  const loadData = () => {
+    setLoading(true);
+    setError('');
+    fetch('/api/jamu/wording-proposals', { headers: authHeaders(), cache: 'no-store' })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat usulan wording.');
+        setProposals(json.data.items ?? []);
+      })
+      .catch((err) => setError(err.message || 'Gagal memuat usulan wording.'))
+      .finally(() => setLoading(false));
   };
 
-  const handleUpdateStatus = (id: string, newStatus: 'Approved' | 'Rejected') => {
-    setProposals(
-      proposals.map((prop) =>
-        prop.id === id ? { ...prop, status: newStatus } : prop
-      )
-    );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
+
+  const handleCreateProposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCode.trim() || !newProposed.trim()) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/jamu/wording-proposals', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          type: newType,
+          code: newCode,
+          currentWording: newCurrent,
+          proposedWording: newProposed,
+          bloomLevel: newBloom,
+          notes: newNotes,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || 'Gagal menyimpan usulan wording.');
+      setProposals([json.data, ...proposals]);
+      setNewCode('');
+      setNewCurrent('');
+      setNewProposed('');
+      setNewNotes('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan usulan wording.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateStatus = async (prop: WordingProposal, newStatus: 'Approved' | 'Rejected') => {
+    setError('');
+    try {
+      const res = await fetch('/api/jamu/wording-proposals', {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ id_usulan: prop.id_usulan, status: newStatus }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memperbarui status usulan.');
+      setProposals(proposals.map((item) => item.id_usulan === prop.id_usulan ? json.data : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal memperbarui status usulan.');
+    }
   };
 
   return (
@@ -94,8 +108,9 @@ export default function WordingReviewView() {
         </p>
       </div>
 
+      {error && <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg p-3 text-sm">{error}</div>}
+
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        {/* Form Usulan Perubahan Wording */}
         <div className="xl:col-span-1 bg-white rounded-xl border border-gray-200 p-5 shadow-sm h-fit">
           <div className="flex items-center gap-2 mb-4">
             <Edit2 className="w-5 h-5 text-indigo-600" />
@@ -105,9 +120,9 @@ export default function WordingReviewView() {
           <form onSubmit={handleCreateProposal} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Tipe Data</label>
-              <select 
-                value={newType} 
-                onChange={e => setNewType(e.target.value as any)}
+              <select
+                value={newType}
+                onChange={e => setNewType(e.target.value as 'CPL' | 'IK' | 'CPMK')}
                 className="w-full text-sm border-gray-300 rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="CPL">CPL (Capaian Pembelajaran Lulusan)</option>
@@ -117,9 +132,9 @@ export default function WordingReviewView() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Kode (Contoh: CPL-03)</label>
-              <input 
-                type="text" 
+              <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Kode</label>
+              <input
+                type="text"
                 value={newCode}
                 onChange={e => setNewCode(e.target.value)}
                 placeholder="CPL-03 atau IK-02.1"
@@ -129,8 +144,8 @@ export default function WordingReviewView() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Tingkatan Taksonomi Bloom</label>
-              <select 
-                value={newBloom} 
+              <select
+                value={newBloom}
                 onChange={e => setNewBloom(e.target.value)}
                 className="w-full text-sm border-gray-300 rounded-lg p-2.5 focus:ring-indigo-500 focus:border-indigo-500"
               >
@@ -145,7 +160,7 @@ export default function WordingReviewView() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Wording / Deskripsi Saat Ini</label>
-              <textarea 
+              <textarea
                 value={newCurrent}
                 onChange={e => setNewCurrent(e.target.value)}
                 placeholder="Salin kalimat CPL/IK saat ini..."
@@ -156,7 +171,7 @@ export default function WordingReviewView() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Usulan Wording Baru (Terukur)</label>
-              <textarea 
+              <textarea
                 value={newProposed}
                 onChange={e => setNewProposed(e.target.value)}
                 placeholder="Tulis alternatif kalimat yang menggunakan kata kerja operasional..."
@@ -167,7 +182,7 @@ export default function WordingReviewView() {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Catatan / Alasan Perubahan</label>
-              <textarea 
+              <textarea
                 value={newNotes}
                 onChange={e => setNewNotes(e.target.value)}
                 placeholder="Mengapa wording ini diusulkan diubah?"
@@ -176,22 +191,22 @@ export default function WordingReviewView() {
               />
             </div>
 
-            <button 
-              type="submit" 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2.5 rounded-lg transition-colors shadow-sm"
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-medium text-sm py-2.5 rounded-lg transition-colors shadow-sm"
             >
-              Kirim Usulan Wording
+              {saving ? 'Menyimpan...' : 'Kirim Usulan Wording'}
             </button>
           </form>
         </div>
 
-        {/* Daftar Proposal Perbaikan Wording */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 flex gap-3">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
             <div className="text-xs">
               <span className="font-bold">Panduan Penjaminan Mutu: </span>
-              Rumusan wording kompetensi yang baik harus terukur, menggunakan kata kerja operasional (KKO) Taksonomi Bloom (C1-C6), dan menghindari kata kerja subjektif seperti "mengetahui", "mengerti", atau "memahami" karena sulit dievaluasi secara objektif dalam asesmen.
+              Rumusan wording kompetensi yang baik harus terukur, menggunakan kata kerja operasional (KKO) Taksonomi Bloom (C1-C6), dan menghindari kata kerja subjektif seperti &quot;mengetahui&quot;, &quot;mengerti&quot;, atau &quot;memahami&quot; karena sulit dievaluasi secara objektif dalam asesmen.
             </div>
           </div>
 
@@ -202,7 +217,7 @@ export default function WordingReviewView() {
 
             <div className="divide-y divide-gray-100">
               {proposals.map((prop) => (
-                <div key={prop.id} className="p-5 hover:bg-gray-50/50 transition-colors">
+                <div key={prop.id_usulan} className="p-5 hover:bg-gray-50/50 transition-colors">
                   <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-bold text-gray-400">{prop.id}</span>
@@ -211,42 +226,39 @@ export default function WordingReviewView() {
                       <span className="text-xs bg-indigo-50 text-indigo-700 font-medium px-2 py-0.5 rounded border border-indigo-100">{prop.bloomLevel}</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        prop.status === 'Approved' ? 'bg-green-100 text-green-700' :
-                        prop.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {prop.status === 'Approved' ? 'Disetujui' :
-                         prop.status === 'Rejected' ? 'Ditolak' : 'Pending'}
-                      </span>
-                    </div>
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      prop.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                      prop.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {prop.status === 'Approved' ? 'Disetujui' : prop.status === 'Rejected' ? 'Ditolak' : 'Pending'}
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mt-3">
                     <div className="bg-gray-50 p-3 rounded border border-gray-100">
                       <div className="font-semibold text-gray-500 uppercase tracking-wider mb-1">Kalimat Saat Ini:</div>
-                      <p className="text-gray-700 italic">"{prop.currentWording || '-'}"</p>
+                      <p className="text-gray-700 italic">&quot;{prop.currentWording || '-'}&quot;</p>
                     </div>
                     <div className="bg-indigo-50/30 p-3 rounded border border-indigo-100/50">
                       <div className="font-semibold text-indigo-700 uppercase tracking-wider mb-1">Usulan Wording Baru:</div>
-                      <p className="text-indigo-900 font-medium">"{prop.proposedWording}"</p>
+                      <p className="text-indigo-900 font-medium">&quot;{prop.proposedWording}&quot;</p>
                     </div>
                   </div>
 
                   <div className="mt-3 text-xs text-gray-600">
-                    <span className="font-bold">Alasan/Catatan: </span> {prop.notes}
+                    <span className="font-bold">Alasan/Catatan: </span> {prop.notes || '-'}
                   </div>
 
                   {prop.status === 'Pending' && (
                     <div className="flex gap-2 justify-end mt-4">
-                      <button 
-                        onClick={() => handleUpdateStatus(prop.id, 'Approved')}
+                      <button
+                        onClick={() => handleUpdateStatus(prop, 'Approved')}
                         className="flex items-center gap-1 px-3 py-1.5 bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 text-xs font-bold rounded-lg transition-colors"
                       >
                         <CheckCircle className="w-3.5 h-3.5" /> Setujui
                       </button>
-                      <button 
-                        onClick={() => handleUpdateStatus(prop.id, 'Rejected')}
+                      <button
+                        onClick={() => handleUpdateStatus(prop, 'Rejected')}
                         className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold rounded-lg transition-colors"
                       >
                         <XCircle className="w-3.5 h-3.5" /> Tolak
@@ -255,6 +267,11 @@ export default function WordingReviewView() {
                   )}
                 </div>
               ))}
+              {!proposals.length && (
+                <div className="p-10 text-center text-sm text-gray-500">
+                  {loading ? 'Memuat usulan wording...' : 'Belum ada usulan wording.'}
+                </div>
+              )}
             </div>
           </div>
         </div>

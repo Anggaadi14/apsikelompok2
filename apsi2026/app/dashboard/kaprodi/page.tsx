@@ -5,13 +5,11 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { Users, BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import KaprodiDashboardView from './components/KaprodiDashboardView';
-import MahasiswaListView from './components/MahasiswaListView';
 
 export default function KaprodiDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'mahasiswa'>('dashboard');
   const [sessionUser, setSessionUser] = useState<UserSession | null>(null);
 
   // Auth Guard check
@@ -27,16 +25,16 @@ export default function KaprodiDashboard() {
       if (userObj.role !== 'kaprodi') {
         router.push(`/dashboard/${userObj.role}`);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSessionUser(userObj);
       }
-    } catch (e) {
+    } catch {
       router.push('/');
     }
   }, [router]);
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-5 h-5" /> },
-    { id: 'mahasiswa', label: 'Data Mahasiswa', icon: <Users className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {
@@ -69,14 +67,13 @@ export default function KaprodiDashboard() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           items={sidebarItems}
-          activeTab={activeTab}
-          setActiveTab={(id: string) => setActiveTab(id as typeof activeTab)}
+          activeTab="dashboard"
+          setActiveTab={() => {}}
         />
 
         <main className="flex-1 overflow-auto">
           <div className="p-8">
-            {activeTab === 'dashboard' && <KaprodiDashboardView sessionUser={sessionUser} />}
-            {activeTab === 'mahasiswa' && <MahasiswaListView sessionUser={sessionUser} />}
+            <KaprodiDashboardView sessionUser={sessionUser} />
           </div>
         </main>
       </div>

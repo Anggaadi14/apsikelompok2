@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Download,
   User,
   CheckCircle,
   XCircle,
@@ -37,7 +36,7 @@ interface CplViewProps {
 }
 
 export default function CplView({ cplData, detailCplData, profile }: CplViewProps) {
-  const [cplSubTab, setCplSubTab] = useState<'grafik' | 'lk' | 'report'>('grafik');
+  const [cplSubTab, setCplSubTab] = useState<'grafik' | 'report'>('grafik');
   const [expandedCPL, setExpandedCPL] = useState<number | null>(null);
 
   const radarData = cplData.map((cpl) => ({
@@ -45,6 +44,51 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
     nilai: cpl.nilai,
     target: cpl.target,
   }));
+
+  const detailByCpl = useMemo(() => {
+    const map = new Map<string, DetailCplItem>();
+    for (const d of detailCplData) map.set(d.cpl, d);
+    return map;
+  }, [detailCplData]);
+
+  const RadarTooltipContent = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const subject = payload[0]?.payload?.subject;
+    const detail = detailByCpl.get(subject);
+    const nilai = payload.find((p: any) => p.dataKey === 'nilai')?.value;
+    const target = payload.find((p: any) => p.dataKey === 'target')?.value;
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg shadow-xl p-3 text-xs max-w-xs">
+        <p className="font-bold text-slate-800">{subject}</p>
+        <p className="text-slate-600 mb-2">
+          Nilai: <span className="font-bold text-indigo-600">{nilai}</span>
+          {' · '}Target: <span className="font-bold text-red-500">{target}</span>
+        </p>
+        {detail && detail.ik.length > 0 ? (
+          <div className="space-y-2 max-h-56 overflow-y-auto">
+            {detail.ik.map((ikItem, i) => (
+              <div key={i} className="border-t border-gray-100 pt-1.5 first:border-t-0 first:pt-0">
+                <p className="font-semibold text-purple-700">
+                  {ikItem.kode}
+                  <span className="text-slate-500 font-normal"> — {ikItem.deskripsi}</span>
+                </p>
+                <ul className="ml-2 mt-0.5 space-y-0.5">
+                  {ikItem.cpmk.map((c, j) => (
+                    <li key={j} className="text-slate-600 leading-snug">
+                      <span className="font-medium text-blue-700">{c.kode}</span> — {c.matakuliah}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-slate-400 italic">Belum ada data IK/CPMK pembentuk.</p>
+        )}
+      </div>
+    );
+  };
 
   const validCplData = cplData.filter((c) => c.nilai > 0);
   const averageCpl = validCplData.length > 0
@@ -68,16 +112,6 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
               }`}
             >
               Grafik CPL
-            </button>
-            <button
-              onClick={() => setCplSubTab('lk')}
-              className={`px-6 py-3.5 text-sm font-bold border-b-2 cursor-pointer transition ${
-                cplSubTab === 'lk'
-                  ? 'border-indigo-600 text-indigo-600 bg-white'
-                  : 'border-transparent text-gray-500 hover:text-slate-800 hover:bg-slate-50'
-              }`}
-            >
-              Grafik LK
             </button>
             <button
               onClick={() => setCplSubTab('report')}
@@ -148,13 +182,7 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
                 iconType="circle"
               />
 
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 8,
-                  border: '1px solid #e2e8f0',
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip content={<RadarTooltipContent />} />
             </RadarChart>
           </ResponsiveContainer>
         </div>
@@ -193,18 +221,9 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
           {/* TAB 3: Report Tabel */}
           {cplSubTab === 'report' && (
             <div className="space-y-6 animate-fadeIn">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Report Tabel - Monitoring CPL Individu</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Ringkasan lengkap hierarki pembentuk CPL, IK, dan CPMK Mata Kuliah</p>
-                </div>
-                <button
-                  onClick={() => {}}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold text-sm shadow hover:shadow-md transition active:scale-95 cursor-pointer shrink-0"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Export Excel</span>
-                </button>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Report Tabel - Monitoring CPL Individu</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Ringkasan lengkap hierarki pembentuk CPL, IK, dan CPMK Mata Kuliah</p>
               </div>
 
               {/* Student Profile Card Mini — PAKAI PROP `profile` */}
@@ -391,7 +410,6 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider w-1/4">IK/PI</th>
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider text-center w-20">Bobot</th>
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider w-1/3">CPMK</th>
-                                  <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider text-center w-20">Bobot</th>
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider">Mata Kuliah</th>
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider text-center w-12">Smt</th>
                                   <th className="py-2.5 px-4 font-bold text-slate-500 uppercase tracking-wider text-center w-24">Nilai</th>
@@ -421,9 +439,6 @@ export default function CplView({ cplData, detailCplData, profile }: CplViewProp
                                       <td className="py-3 px-4 bg-blue-50/20 align-top">
                                         <span className="font-bold text-blue-700 block">{cpmkItem.kode}</span>
                                         <span className="text-slate-600 mt-1 block leading-relaxed">{cpmkItem.deskripsi}</span>
-                                      </td>
-                                      <td className="py-3 px-4 bg-blue-50/20 font-bold text-center text-blue-700 align-top">
-                                        {cpmkItem.bobot}%
                                       </td>
                                       <td className="py-3 px-4 text-slate-700 font-semibold">{cpmkItem.matakuliah}</td>
                                       <td className="py-3 px-4 text-center text-slate-500 font-semibold">{cpmkItem.semester}</td>
