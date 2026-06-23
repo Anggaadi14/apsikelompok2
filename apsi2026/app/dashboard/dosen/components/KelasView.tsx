@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { UserSession } from '../../../data/users';
-import { Search, ChevronRight, Loader2, AlertCircle, Users as UsersIcon } from 'lucide-react';
+import { Search, ChevronRight, Loader2, AlertCircle, Users as UsersIcon, ArrowUpDown } from 'lucide-react';
 import KelasDetailView from './KelasDetailView';
 
 interface KelasViewProps {
@@ -25,8 +25,32 @@ type Kelas = {
   jumlah_mahasiswa: number;
 };
 
+type SortOption = 'ta_desc' | 'ta_asc' | 'nama_asc' | 'nama_desc' | 'mhs_desc' | 'mhs_asc';
+
+const SORT_OPTIONS: Array<{ value: SortOption; label: string }> = [
+  { value: 'ta_desc', label: 'Tahun Akademik (Terbaru)' },
+  { value: 'ta_asc', label: 'Tahun Akademik (Terlama)' },
+  { value: 'nama_asc', label: 'Nama MK (A-Z)' },
+  { value: 'nama_desc', label: 'Nama MK (Z-A)' },
+  { value: 'mhs_desc', label: 'Jumlah Mahasiswa (Terbanyak)' },
+  { value: 'mhs_asc', label: 'Jumlah Mahasiswa (Tersedikit)' },
+];
+
+function semesterRank(s: string): number {
+  if (s === 'Ganjil') return 0;
+  if (s === 'Genap') return 1;
+  return 2; // Pendek / lainnya
+}
+
+function taSortKey(k: Kelas): number {
+  const m = k.tahun_akademik.match(/\d{4}/);
+  const year = m ? Number(m[0]) : 0;
+  return year * 10 + semesterRank(k.semester);
+}
+
 export default function KelasView({ sessionUser }: KelasViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('ta_desc');
   const [kelas, setKelas] = useState<Kelas[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +84,26 @@ export default function KelasView({ sessionUser }: KelasViewProps) {
 
   const filteredKelas = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return kelas;
-    return kelas.filter(
-      (k) =>
-        k.nama_mk.toLowerCase().includes(q) ||
-        k.kode_mk.toLowerCase().includes(q) ||
-        (k.kode_kelas ?? '').toLowerCase().includes(q),
-    );
-  }, [kelas, searchTerm]);
+    const filtered = !q
+      ? kelas
+      : kelas.filter(
+          (k) =>
+            k.nama_mk.toLowerCase().includes(q) ||
+            k.kode_mk.toLowerCase().includes(q) ||
+            (k.kode_kelas ?? '').toLowerCase().includes(q),
+        );
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'ta_desc': sorted.sort((a, b) => taSortKey(b) - taSortKey(a)); break;
+      case 'ta_asc': sorted.sort((a, b) => taSortKey(a) - taSortKey(b)); break;
+      case 'nama_asc': sorted.sort((a, b) => a.nama_mk.localeCompare(b.nama_mk)); break;
+      case 'nama_desc': sorted.sort((a, b) => b.nama_mk.localeCompare(a.nama_mk)); break;
+      case 'mhs_desc': sorted.sort((a, b) => b.jumlah_mahasiswa - a.jumlah_mahasiswa); break;
+      case 'mhs_asc': sorted.sort((a, b) => a.jumlah_mahasiswa - b.jumlah_mahasiswa); break;
+    }
+    return sorted;
+  }, [kelas, searchTerm, sortBy]);
 
   // ── Mode detail ─────────────────────────────────────────────────────────
   if (selectedId !== null) {
@@ -100,16 +136,30 @@ export default function KelasView({ sessionUser }: KelasViewProps) {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Cari berdasarkan kode atau nama mata kuliah..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
+      {/* Search & Sort */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari berdasarkan kode atau nama mata kuliah..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div className="relative sm:w-64">
+          <ArrowUpDown className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <select
+            value={sortBy}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as SortOption)}
+            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-sm"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Kelas Cards */}

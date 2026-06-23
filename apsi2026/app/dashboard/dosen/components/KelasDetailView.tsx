@@ -15,7 +15,9 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 
-import MappingCpmkIkPanel from './MappingCpmkIkPanel';
+import CapaianCpmkPanel from './CapaianCpmkPanel';
+import CapaianIkPanel from './CapaianIkPanel';
+import CapaianCplPanel from './CapaianCplPanel';
 
 interface KelasDetailViewProps {
   sessionUser: UserSession;
@@ -81,11 +83,14 @@ type UploadResultDetail = {
   catatan?: string;
 };
 
+type SubTab = 'nilai' | 'cpmk' | 'ik' | 'cpl';
+
 export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasDetailViewProps) {
   const [detail, setDetail] = useState<KelasDetail | null>(null);
   const [nilai, setNilai] = useState<NilaiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subTab, setSubTab] = useState<SubTab>('nilai');
 
   // Upload state
   const [showUpload, setShowUpload] = useState(false);
@@ -359,23 +364,15 @@ const closeUploadModal = () => {
         <button onClick={onBack} className="flex items-center gap-2 text-sm text-indigo-600 hover:underline mb-3">
           <ArrowLeft className="w-4 h-4" /> Kembali ke daftar kelas
         </button>
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              <span className="font-mono text-indigo-700 mr-2 text-2xl">{kelas.kode_mk}</span>
-              {kelas.nama_mk}
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Kelas {kelas.kode_kelas ?? '—'} • {kelas.tahun_akademik} {kelas.semester} •{' '}
-              {kelas.sks} SKS • Kurikulum {kelas.kode_kurikulum}
-            </p>
-          </div>
-          <button
-  onClick={openUploadModal}
-  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm"
->
-  <Upload className="w-4 h-4" /> Upload Nilai SIAKAD
-</button>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            <span className="font-mono text-indigo-700 mr-2 text-2xl">{kelas.kode_mk}</span>
+            {kelas.nama_mk}
+          </h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Kelas {kelas.kode_kelas ?? '—'} • {kelas.tahun_akademik} {kelas.semester} •{' '}
+            {kelas.sks} SKS • Kurikulum {kelas.kode_kurikulum}
+          </p>
         </div>
       </div>
 
@@ -425,10 +422,67 @@ const closeUploadModal = () => {
         </div>
       )}
 
+      {/* Tab bar */}
+      <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+        <div className="border-b border-gray-200 bg-slate-50/50">
+          <div className="flex">
+            <button
+              onClick={() => setSubTab('nilai')}
+              className={`px-6 py-3.5 text-sm font-bold border-b-2 cursor-pointer transition ${
+                subTab === 'nilai'
+                  ? 'border-indigo-600 text-indigo-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              Tabel Nilai
+            </button>
+            <button
+              onClick={() => setSubTab('cpmk')}
+              className={`px-6 py-3.5 text-sm font-bold border-b-2 cursor-pointer transition ${
+                subTab === 'cpmk'
+                  ? 'border-indigo-600 text-indigo-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              Capaian CPMK
+            </button>
+            <button
+              onClick={() => setSubTab('ik')}
+              className={`px-6 py-3.5 text-sm font-bold border-b-2 cursor-pointer transition ${
+                subTab === 'ik'
+                  ? 'border-indigo-600 text-indigo-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              Capaian IK
+            </button>
+            <button
+              onClick={() => setSubTab('cpl')}
+              className={`px-6 py-3.5 text-sm font-bold border-b-2 cursor-pointer transition ${
+                subTab === 'cpl'
+                  ? 'border-indigo-600 text-indigo-600 bg-white'
+                  : 'border-transparent text-gray-500 hover:text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              Capaian CPL
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Tabel nilai */}
+      {subTab === 'nilai' && (
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-semibold text-gray-900">Tabel Nilai</h3>
+          <button
+            onClick={openUploadModal}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm text-sm"
+          >
+            <Upload className="w-4 h-4" /> Upload Nilai SIAKAD
+          </button>
+        </div>
+        <div className="px-4 pt-3">
           <p className="text-xs text-gray-500 flex items-center gap-1">
             <Info className="w-3.5 h-3.5" />
             Klik sel untuk edit. Enter = simpan, Esc = batal. Baris R: = nilai remedi.
@@ -585,8 +639,13 @@ const closeUploadModal = () => {
           </div>
         )}
       </div>
-      
-<MappingCpmkIkPanel idKelas={idKelas} />
+      )}
+
+      {subTab === 'cpmk' && <CapaianCpmkPanel idKelas={idKelas} />}
+
+      {subTab === 'ik' && <CapaianIkPanel idKelas={idKelas} />}
+
+      {subTab === 'cpl' && <CapaianCplPanel idKelas={idKelas} />}
 
       {/* Upload Modal */}
       {showUpload && (
