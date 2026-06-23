@@ -1,16 +1,38 @@
 'use client';
 
+import { UserSession } from '../../../data/users';
+import {
+  Target, CheckCircle2, XCircle, AlertTriangle,
+  FileWarning, Download, Filter, FileText, FileSpreadsheet, Image as ImageIcon
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Target, XCircle, AlertTriangle,
-  Download, Filter, FileText, FileSpreadsheet, Image as ImageIcon,
-  CheckSquare, AlertCircle
-} from 'lucide-react';
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Cell,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+} from 'recharts';
+
+interface JamuDashboardViewProps {
+  sessionUser: UserSession;
+}
 
 type Option = { value: string; label: string };
 type CplChartRow = { id: string; name: string; target: number; realisasi: number; deskripsi?: string };
 type CriticalIk = { kode: string; nilai: number; target: number; deskripsi: string; cpl: string };
 type IncompleteClass = { id_kelas: number; label: string; status: string };
+type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
 type DashboardData = {
   options: {
     tahun: string[];
@@ -19,6 +41,7 @@ type DashboardData = {
     angkatan: string[];
     cpl: Option[];
     mata_kuliah: Option[];
+    kelas: Option[];
   };
   stats: {
     rata_cpl: number;
@@ -29,28 +52,22 @@ type DashboardData = {
     ik_bermasalah: number;
     mk_belum_upload: number;
   };
-  mutu: {
-    kualitas_asesmen: number;
-    rekomendasi_aktif: number;
-    wording_pending: number;
-  };
   targetRealisasiCPL: CplChartRow[];
   criticalCpl: CplChartRow[];
   criticalIk: CriticalIk[];
   incompleteClasses: IncompleteClass[];
 };
 
-type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
-
 function authHeaders(): Record<string, string> {
   const raw = sessionStorage.getItem('currentUser');
   return raw ? { 'x-user-session': raw } : {};
 }
 
-export default function JamuDashboardView() {
+export default function JamuDashboardView({ sessionUser }: JamuDashboardViewProps) {
   const [filterTahun, setFilterTahun] = useState('Semua');
   const [filterSemester, setFilterSemester] = useState('Semua');
   const [filterAngkatan, setFilterAngkatan] = useState('Semua');
+  const [filterKelas, setFilterKelas] = useState('Semua');
   const [filterCPL, setFilterCPL] = useState('Semua');
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -63,6 +80,7 @@ export default function JamuDashboardView() {
     if (filterTahun !== 'Semua') params.set('ta', filterTahun);
     if (filterSemester !== 'Semua') params.set('sem', filterSemester);
     if (filterAngkatan !== 'Semua') params.set('angkatan', filterAngkatan);
+    if (filterKelas !== 'Semua') params.set('kelas', filterKelas);
     if (filterCPL !== 'Semua') params.set('cpl', filterCPL);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -75,61 +93,72 @@ export default function JamuDashboardView() {
     })
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat dashboard mutu.');
+        if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat dashboard.');
         setData(json.data);
       })
       .catch((err) => {
-        if (err.name !== 'AbortError') setError(err.message || 'Gagal memuat dashboard mutu.');
+        if (err.name !== 'AbortError') setError(err.message || 'Gagal memuat dashboard.');
       })
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [filterTahun, filterSemester, filterAngkatan, filterCPL]);
+  }, [filterTahun, filterSemester, filterAngkatan, filterKelas, filterCPL]);
 
-  const stats = useMemo(() => [
-    {
-      label: 'Rata-rata Capaian CPL',
-      value: data ? String(data.stats.rata_cpl) : '-',
-      target: 'Target: mengikuti CPL',
-      icon: <Target className="w-6 h-6" />,
-      color: 'bg-indigo-50 text-indigo-600',
-      borderColor: 'border-indigo-200',
-    },
-    {
-      label: 'CPL di Bawah Target',
-      value: data ? `${data.stats.cpl_belum} CPL` : '-',
-      target: data?.stats.cpl_belum_label || '-',
-      icon: <XCircle className="w-6 h-6" />,
-      color: 'bg-rose-50 text-rose-600',
-      borderColor: 'border-rose-200',
-    },
-    {
-      label: 'Kualitas Asesmen',
-      value: data ? `${data.mutu.kualitas_asesmen}%` : '-',
-      target: 'Berdasar kelengkapan upload',
-      icon: <CheckSquare className="w-6 h-6" />,
-      color: 'bg-emerald-50 text-emerald-600',
-      borderColor: 'border-emerald-200',
-    },
-    {
-      label: 'Rekomendasi Mutu Aktif',
-      value: data ? `${data.mutu.rekomendasi_aktif} Usulan` : '-',
-      target: 'Draft/terkirim',
-      icon: <AlertTriangle className="w-6 h-6" />,
-      color: 'bg-amber-50 text-amber-600',
-      borderColor: 'border-amber-200',
-    },
-    {
-      label: 'Usulan Wording Pending',
-      value: data ? `${data.mutu.wording_pending} Draft` : '-',
-      target: 'Menunggu review',
-      icon: <FileText className="w-6 h-6" />,
-      color: 'bg-blue-50 text-blue-600',
-      borderColor: 'border-blue-200',
-    },
-  ], [data]);
+  const stats = useMemo(() => {
+    const s = data?.stats;
+    return [
+      {
+        label: 'Rata-rata Capaian CPL',
+        value: s ? String(s.rata_cpl) : '-',
+        target: 'Target: mengikuti CPL',
+        icon: <Target className="w-6 h-6" />,
+        color: 'bg-indigo-50 text-indigo-600',
+        borderColor: 'border-indigo-200',
+      },
+      {
+        label: 'CPL Tercapai Target',
+        value: s ? `${s.cpl_tercapai} / ${s.cpl_total}` : '-',
+        target: 'CPL aman',
+        icon: <CheckCircle2 className="w-6 h-6" />,
+        color: 'bg-emerald-50 text-emerald-600',
+        borderColor: 'border-emerald-200',
+      },
+      {
+        label: 'CPL Belum Tercapai',
+        value: s ? String(s.cpl_belum) : '-',
+        target: s?.cpl_belum_label || '-',
+        icon: <XCircle className="w-6 h-6" />,
+        color: 'bg-rose-50 text-rose-600',
+        borderColor: 'border-rose-200',
+      },
+      {
+        label: 'IK Bermasalah',
+        value: s ? `${s.ik_bermasalah} IK` : '-',
+        target: 'Perlu evaluasi',
+        icon: <AlertTriangle className="w-6 h-6" />,
+        color: 'bg-amber-50 text-amber-600',
+        borderColor: 'border-amber-200',
+      },
+      {
+        label: 'MK Belum Upload Nilai',
+        value: s ? `${s.mk_belum_upload} MK` : '-',
+        target: 'Sesuai filter',
+        icon: <FileWarning className="w-6 h-6" />,
+        color: 'bg-slate-50 text-slate-600',
+        borderColor: 'border-slate-200',
+      },
+    ];
+  }, [data]);
+
+  const targetRealisasiCPL = data?.targetRealisasiCPL ?? [];
   const criticalCpl = data?.criticalCpl ?? [];
   const criticalIk = data?.criticalIk ?? [];
+  const radarData = targetRealisasiCPL.map((cpl) => ({
+    subject: cpl.id,
+    realisasi: cpl.realisasi,
+    target: cpl.target,
+    name: cpl.name,
+  }));
 
   const handleDownloadPdf = async () => {
     setIsDownloadOpen(false);
@@ -146,7 +175,7 @@ export default function JamuDashboardView() {
     doc.setFont('helvetica', 'bold');
     doc.text('SICPL - Portal JAMU', marginX, 16);
     doc.setFontSize(11);
-    doc.text('Laporan Evaluasi Mutu Program Studi', marginX, 23);
+    doc.text('Laporan Monitoring OBE Program Studi', marginX, 23);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(
@@ -156,14 +185,14 @@ export default function JamuDashboardView() {
     );
 
     doc.setFontSize(9);
-    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}`;
+    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}  ·  Kelas: ${filterKelas}`;
     doc.text(doc.splitTextToSize(`Filter: ${filterLine}`, 180), marginX, 37);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(
       doc.splitTextToSize(
-        `Rata-rata CPL: ${data.stats.rata_cpl}   ·   CPL di Bawah Target: ${data.stats.cpl_belum} CPL   ·   Kualitas Asesmen: ${data.mutu.kualitas_asesmen}%   ·   Rekomendasi Mutu Aktif: ${data.mutu.rekomendasi_aktif}   ·   Usulan Wording Pending: ${data.mutu.wording_pending}`,
+        `Rata-rata CPL: ${data.stats.rata_cpl}   ·   Tercapai: ${data.stats.cpl_tercapai}/${data.stats.cpl_total}   ·   Belum Tercapai: ${data.stats.cpl_belum}   ·   IK Bermasalah: ${data.stats.ik_bermasalah}   ·   MK Belum Upload: ${data.stats.mk_belum_upload}`,
         180,
       ),
       marginX,
@@ -172,10 +201,10 @@ export default function JamuDashboardView() {
     doc.setFont('helvetica', 'normal');
 
     autoTable(doc, {
-      startY: 60,
+      startY: 58,
       margin: { left: marginX, right: marginX },
       head: [['CPL', 'Nama', 'Target', 'Realisasi', 'Status']],
-      body: data.targetRealisasiCPL.map((c) => [
+      body: targetRealisasiCPL.map((c) => [
         c.id,
         c.name,
         c.target,
@@ -186,7 +215,7 @@ export default function JamuDashboardView() {
       headStyles: { fillColor: [79, 70, 229] },
     });
 
-    let cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 60) + 10;
+    let cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 58) + 10;
     if (cursorY > pageHeight - 40) {
       doc.addPage();
       cursorY = 16;
@@ -245,15 +274,15 @@ export default function JamuDashboardView() {
       doc.text('Semua kelas pada filter ini sudah punya upload nilai sukses.', marginX, cursorY);
     }
 
-    doc.save(`Laporan_Evaluasi_Mutu_JAMU_${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`Laporan_OBE_JAMU_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard Evaluasi Penjaminan Mutu</h1>
-          <p className="text-gray-600 mt-1">Pemantauan Mutu Pembelajaran, Asesmen OBE, & Evaluasi Wording CPL/IK</p>
+          <h1 className="text-3xl font-bold text-gray-900">Monitoring OBE Penjaminan Mutu</h1>
+          <p className="text-gray-600 mt-1">Pemantauan Ketercapaian CPL & IK Program Studi {sessionUser.prodi}</p>
         </div>
 
         <div className="relative">
@@ -262,7 +291,7 @@ export default function JamuDashboardView() {
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm shadow-sm"
           >
             <Download className="w-4 h-4" />
-            Download Laporan Mutu
+            Download Report
           </button>
 
           {isDownloadOpen && (
@@ -288,13 +317,14 @@ export default function JamuDashboardView() {
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-700">Filter Analisis Mutu</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Filter Analisis OBE</h2>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <FilterSelect label="Tahun Ajar" value={filterTahun} onChange={setFilterTahun} values={data?.options.tahun ?? []} />
           <FilterSelect label="Semester" value={filterSemester} onChange={setFilterSemester} values={data?.options.semester ?? []} />
           <FilterSelect label="Angkatan" value={filterAngkatan} onChange={setFilterAngkatan} values={data?.options.angkatan ?? []} />
           <FilterSelect label="CPL" value={filterCPL} onChange={setFilterCPL} options={data?.options.cpl ?? []} />
+          <FilterSelect label="Kelas" value={filterKelas} onChange={setFilterKelas} options={data?.options.kelas ?? []} />
         </div>
       </div>
 
@@ -322,9 +352,9 @@ export default function JamuDashboardView() {
           <div className="bg-rose-50 border border-rose-200 rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4 text-rose-800">
               <AlertTriangle className="w-5 h-5" />
-              <h3 className="font-bold text-sm">Anomali & CPL Kritis (JAMU)</h3>
+              <h3 className="font-bold text-sm">Warning: CPL & IK Kritis</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-5">
               <div>
                 <h4 className="text-[11px] font-bold uppercase tracking-wide text-rose-700 mb-2">CPL Kritis</h4>
                 <div className="space-y-3">
@@ -333,7 +363,7 @@ export default function JamuDashboardView() {
                       <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.id}</span>
                       </div>
-                      <p className="text-xs text-gray-500">{item.deskripsi || item.name || 'Perlu validasi mutu lanjutan.'}</p>
+                      <p className="text-xs text-gray-500">{item.deskripsi || item.name || 'Perlu evaluasi lanjutan.'}</p>
                     </div>
                   ))}
                   {!loading && criticalCpl.length === 0 && (
@@ -350,7 +380,7 @@ export default function JamuDashboardView() {
                       <div className="flex items-center mb-1">
                         <span className="text-xs font-bold text-gray-900">{item.kode}</span>
                       </div>
-                      <p className="text-xs text-gray-500">{item.deskripsi || 'Perlu validasi mutu lanjutan.'}</p>
+                      <p className="text-xs text-gray-500">{item.deskripsi || 'Perlu evaluasi lanjutan.'}</p>
                     </div>
                   ))}
                   {!loading && criticalIk.length === 0 && (
@@ -363,58 +393,87 @@ export default function JamuDashboardView() {
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4 text-slate-800">
-              <AlertCircle className="w-5 h-5" />
-              <h3 className="font-bold text-sm">Temuan Sebaran Nilai</h3>
+              <FileWarning className="w-5 h-5" />
+              <h3 className="font-bold text-sm">Status Data Belum Lengkap</h3>
             </div>
             <div className="space-y-2">
-              {criticalIk.slice(0, 3).map((ik) => (
-                <div key={ik.kode} className="bg-white p-3 rounded border border-slate-100 text-xs shadow-sm space-y-1">
-                  <div className="flex justify-between font-medium text-gray-700 gap-3">
-                    <span>{ik.kode}</span>
-                    <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">Perlu Review</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500">{ik.deskripsi}</p>
+              {(data?.incompleteClasses ?? []).map((item) => (
+                <div key={item.id_kelas} className="flex justify-between items-center bg-white p-2.5 rounded border border-slate-100 text-xs shadow-sm gap-3">
+                  <span className="font-medium text-gray-700">{item.label}</span>
+                  <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-medium border border-amber-100 whitespace-nowrap">{item.status}</span>
                 </div>
               ))}
-              {!loading && !data?.criticalIk.length && <p className="text-xs text-slate-600">Tidak ada temuan IK bermasalah.</p>}
+              {!loading && !data?.incompleteClasses.length && (
+                <p className="text-xs text-slate-600">Semua kelas pada filter ini sudah punya upload nilai sukses.</p>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Target vs Realisasi Capaian CPL (Analisis Mutu {filterTahun})</h2>
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Grafik Radar Capaian CPL</h2>
+            <p className="text-xs text-gray-500 mb-4">Visualisasi realisasi dan target CPL 1-10 program studi.</p>
 
-          <div className="space-y-6">
-            {(data?.targetRealisasiCPL ?? []).map((cpl) => {
-              const isWarning = cpl.realisasi < cpl.target;
-              return (
-                <div key={cpl.id}>
-                  <div className="flex justify-between items-end mb-2">
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-900">{cpl.id}</h4>
-                      <p className="text-xs text-gray-500">{cpl.name}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-sm font-bold ${isWarning ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        {cpl.realisasi}%
-                      </span>
-                      <span className="text-xs text-gray-400 font-medium ml-1">/ {cpl.target}% Target</span>
-                    </div>
-                  </div>
-
-                  <div className="relative w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-800 z-10" style={{ left: `${Math.min(cpl.target, 100)}%` }} />
-                    <div
-                      className={`absolute top-0 bottom-0 left-0 transition-all duration-1000 ${isWarning ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${Math.min(cpl.realisasi, 100)}%` }}
+            <div className="h-[400px] w-full flex justify-center">
+              {radarData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                    <PolarGrid stroke="#e2e8f0" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#475569' }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <Radar name="Realisasi" dataKey="realisasi" stroke="#6366f1" fill="#6366f1" fillOpacity={0.45} />
+                    <Radar name="Target" dataKey="target" stroke="#ef4444" fill="#ef4444" fillOpacity={0.12} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelFormatter={(label) => radarData.find((c) => c.subject === label)?.name ?? label}
                     />
-                  </div>
-                </div>
-              );
-            })}
-            {!loading && !data?.targetRealisasiCPL.length && (
-              <div className="py-16 text-center text-sm text-gray-500">Belum ada data CPL untuk filter ini.</div>
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-gray-500">Belum ada data CPL untuk filter ini.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6">Target vs Realisasi CPL (Tahun Ajar {filterTahun})</h2>
+
+          <div className="h-[320px] w-full">
+            {targetRealisasiCPL.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={targetRealisasiCPL} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="id" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <Tooltip
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    labelFormatter={(label) => targetRealisasiCPL.find((c) => c.id === label)?.name ?? label}
+                  />
+                  <Legend />
+                  <Bar dataKey="realisasi" name="Realisasi" radius={[4, 4, 0, 0]}>
+                    {targetRealisasiCPL.map((cpl, i) => (
+                      <Cell key={i} fill={cpl.realisasi < cpl.target ? '#f43f5e' : '#10b981'} />
+                    ))}
+                  </Bar>
+                  <Line
+                    type="monotone"
+                    dataKey="target"
+                    name="Target"
+                    stroke="#64748b"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    dot={{ r: 3, strokeWidth: 2, fill: '#fff' }}
+                    activeDot={{ r: 4 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">Belum ada data CPL untuk filter ini.</div>
             )}
+          </div>
           </div>
         </div>
       </div>

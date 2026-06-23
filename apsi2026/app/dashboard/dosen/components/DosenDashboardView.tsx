@@ -81,13 +81,7 @@ export default function DosenDashboardView({ sessionUser }: DosenDashboardViewPr
       color: 'bg-purple-50 text-purple-600',
       borderColor: 'border-purple-200',
     },
-    {
-      label: 'Sebagai Koordinator',
-      value: String(stats.jumlahKoordinator),
-      icon: <BarChart3 className="w-6 h-6" />,
-      color: 'bg-orange-50 text-orange-600',
-      borderColor: 'border-orange-200',
-    },
+
   ];
 
   // Distribusi semester berdasarkan tahun akademik + semester
@@ -123,7 +117,7 @@ export default function DosenDashboardView({ sessionUser }: DosenDashboardViewPr
       )}
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((stat, idx) => (
           <div
             key={idx}
@@ -192,23 +186,7 @@ export default function DosenDashboardView({ sessionUser }: DosenDashboardViewPr
 
         {/* Quick Stats */}
         <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Distribusi Peran</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Sebagai Koordinator</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {distribusiPeran.koordinator} kelas
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Sebagai Anggota</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {distribusiPeran.anggota} kelas
-                </span>
-              </div>
-            </div>
-          </div>
+          
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Status Input Nilai</h3>

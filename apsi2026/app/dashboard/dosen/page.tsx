@@ -68,7 +68,7 @@ export default function DosenDashboard() {
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-5 h-5" /> },
-    { id: 'kelas', label: 'Kelola Kelas', icon: <Users className="w-5 h-5" /> },
+    { id: 'kelas', label: 'Upload Nilai', icon: <Users className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {

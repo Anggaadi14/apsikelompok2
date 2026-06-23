@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { LayoutDashboard, Award, Edit3 } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import JamuDashboardView from './components/JamuDashboardView';
-import QualityEvaluationView from './components/QualityEvaluationView';
-import WordingReviewView from './components/WordingReviewView';
 
 export default function JamuDashboard() {
   const router = useRouter();
@@ -28,17 +26,16 @@ export default function JamuDashboard() {
       if (userObj.role !== 'jamu') {
         router.push(`/dashboard/${userObj.role}`);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSessionUser(userObj);
       }
-    } catch (e) {
+    } catch {
       router.push('/');
     }
   }, [router]);
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard Mutu', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'evaluation', label: 'Evaluasi Mutu', icon: <Award className="w-5 h-5" /> },
-    { id: 'wording', label: 'Perbaikan Wording', icon: <Edit3 className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {
@@ -60,13 +57,9 @@ export default function JamuDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <JamuDashboardView />;
-      case 'evaluation':
-        return <QualityEvaluationView />;
-      case 'wording':
-        return <WordingReviewView />;
+        return <JamuDashboardView sessionUser={sessionUser} />;
       default:
-        return <JamuDashboardView />;
+        return <JamuDashboardView sessionUser={sessionUser} />;
     }
   };
 

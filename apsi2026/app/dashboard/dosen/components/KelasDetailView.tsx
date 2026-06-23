@@ -5,6 +5,7 @@ import { UserSession } from '../../../data/users';
 import {
   ArrowLeft,
   Upload,
+  Download,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -668,6 +669,13 @@ const closeUploadModal = () => {
     token, distribusi nilai UK1–UK5 ke komponen MK, dan melaporkan masalah ke modul
     data bermasalah.
   </div>
+  <a
+    href="/templates/Template_Nilai_SIAKAD.xlsx"
+    download
+    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-medium"
+  >
+    <Download className="w-3.5 h-3.5" /> Download Contoh Format Excel
+  </a>
   <div>
     <label className="block text-xs font-medium text-gray-700 mb-1">
       Tahun Akademik

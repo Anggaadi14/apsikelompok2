@@ -1,7 +1,7 @@
 'use client';
 
 import { UserSession } from '../../../data/users';
-import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, Edit3 } from 'lucide-react';
+import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, Edit3, Plus, ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 
 interface MappingCpmkIkViewProps { sessionUser: UserSession; }
@@ -15,6 +15,11 @@ interface IkRow {
 interface KurOpt { id_kurikulum: number; kode: string; nama: string; is_active: number; }
 interface CpmkRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; mapped: boolean; }
 interface IkDetail { id_ik: number; kode_ik: string; deskripsi: string; id_cpl: number; kode_cpl: string; singkatan_cpl: string; id_kurikulum: number; kode_kurikulum: string; }
+interface CpmkPickRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; }
+interface IkPickRow { id_ik: number; kode_ik: string; deskripsi: string; id_cpl: number; kode_cpl: string; singkatan_cpl: string; mapped: boolean; }
+interface MkPicked { id_mata_kuliah: number; kode_mk: string; nama_mk: string; }
+interface MkOption extends MkPicked { jumlah_cpmk: number; }
+interface CpmkPicked { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; kode_mk: string; nama_mk: string; }
 
 function authHeaders(): Record<string, string> {
   const raw = typeof window !== 'undefined' ? sessionStorage.getItem('currentUser') : null;
@@ -36,6 +41,18 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
   const [detailIk, setDetailIk] = useState<IkDetail | null>(null);
   const [detailRows, setDetailRows] = useState<CpmkRow[]>([]);
   const [saving, setSaving] = useState(false);
+
+  // Tambah Mapping (wizard 3 langkah: Mata Kuliah -> CPMK -> IK)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addCpmkList, setAddCpmkList] = useState<CpmkPickRow[]>([]);
+  const [addCpmkLoading, setAddCpmkLoading] = useState(false);
+  const [addMkSearch, setAddMkSearch] = useState('');
+  const [selectedMk, setSelectedMk] = useState<MkPicked | null>(null);
+  const [addCpmkSearch, setAddCpmkSearch] = useState('');
+  const [selectedCpmk, setSelectedCpmk] = useState<CpmkPicked | null>(null);
+  const [addIkRows, setAddIkRows] = useState<IkPickRow[]>([]);
+  const [addIkLoading, setAddIkLoading] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
 
   const fetchData = useCallback(async (kurCode?: string) => {
     setLoading(true); setError(null);
@@ -105,6 +122,96 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
     }
     return Array.from(map.values());
   }, [detailRows]);
+
+  // ── Tambah Mapping: Step 1 pilih Mata Kuliah ──────────────────────────
+  const openAddModal = async () => {
+    setShowAddModal(true); setSelectedMk(null); setSelectedCpmk(null); setAddIkRows([]);
+    setAddMkSearch(''); setAddCpmkSearch(''); setError(null); setSuccess(null);
+    setAddCpmkLoading(true);
+    try {
+      const res = await fetch(`/api/admin/mapping-cpmk-ik?kur=${encodeURIComponent(activeKur)}&cpmk_list=1`, { headers: authHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) setError(json.message || 'Gagal memuat daftar mata kuliah.');
+      else setAddCpmkList((json.data?.cpmkList as CpmkPickRow[]) ?? []);
+    } catch { setError('Tidak dapat terhubung ke server.'); }
+    finally { setAddCpmkLoading(false); }
+  };
+  const closeAddModal = () => {
+    if (addSaving) return;
+    setShowAddModal(false); setSelectedMk(null); setSelectedCpmk(null); setAddIkRows([]); setAddMkSearch(''); setAddCpmkSearch('');
+  };
+
+  const mkOptions = useMemo(() => {
+    const map = new Map<number, MkOption>();
+    for (const c of addCpmkList) {
+      const ex = map.get(c.id_mata_kuliah);
+      if (ex) ex.jumlah_cpmk++;
+      else map.set(c.id_mata_kuliah, { id_mata_kuliah: c.id_mata_kuliah, kode_mk: c.kode_mk, nama_mk: c.nama_mk, jumlah_cpmk: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => a.kode_mk.localeCompare(b.kode_mk));
+  }, [addCpmkList]);
+
+  const filteredMkOptions = useMemo(() => {
+    const qq = addMkSearch.trim().toLowerCase();
+    if (!qq) return mkOptions;
+    return mkOptions.filter((m) => m.kode_mk.toLowerCase().includes(qq) || (m.nama_mk ?? '').toLowerCase().includes(qq));
+  }, [mkOptions, addMkSearch]);
+
+  const pickMkForAdd = (m: MkPicked) => { setSelectedMk(m); setAddCpmkSearch(''); };
+  const backToPickMk = () => { setSelectedMk(null); setSelectedCpmk(null); setAddIkRows([]); };
+
+  // ── Tambah Mapping: Step 2 pilih CPMK (dari MK terpilih) ──────────────
+  const cpmkInSelectedMk = useMemo(() => {
+    if (!selectedMk) return [];
+    const qq = addCpmkSearch.trim().toLowerCase();
+    return addCpmkList.filter((c: CpmkPickRow) =>
+      c.id_mata_kuliah === selectedMk.id_mata_kuliah &&
+      (!qq || c.kode_cpmk.toLowerCase().includes(qq) || c.deskripsi_id.toLowerCase().includes(qq)),
+    );
+  }, [addCpmkList, selectedMk, addCpmkSearch]);
+
+  const pickCpmkForAdd = async (c: CpmkPickRow) => {
+    setSelectedCpmk({ id_cpmk: c.id_cpmk, kode_cpmk: c.kode_cpmk, deskripsi_id: c.deskripsi_id, kode_mk: c.kode_mk, nama_mk: c.nama_mk });
+    setAddIkRows([]); setAddIkLoading(true); setError(null);
+    try {
+      const res = await fetch(`/api/admin/mapping-cpmk-ik?kur=${encodeURIComponent(activeKur)}&id_cpmk=${c.id_cpmk}`, { headers: authHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) setError(json.message || 'Gagal memuat daftar IK.');
+      else setAddIkRows((json.data?.ikList as IkPickRow[]) ?? []);
+    } catch { setError('Tidak dapat terhubung ke server.'); }
+    finally { setAddIkLoading(false); }
+  };
+  const backToPickCpmk = () => { setSelectedCpmk(null); setAddIkRows([]); };
+
+  // ── Tambah Mapping: Step 3 pilih IK ───────────────────────────────────
+  const toggleAddIk = (id_ik: number) => {
+    setAddIkRows((prev: IkPickRow[]) => prev.map((r: IkPickRow) => r.id_ik === id_ik ? { ...r, mapped: !r.mapped } : r));
+  };
+  const addSelectedCount = useMemo(() => addIkRows.filter((r: IkPickRow) => r.mapped).length, [addIkRows]);
+
+  const groupedAddIk = useMemo(() => {
+    const map = new Map<number, { kode_cpl: string; singkatan_cpl: string; rows: IkPickRow[] }>();
+    for (const r of addIkRows) {
+      const ex = map.get(r.id_cpl);
+      if (ex) ex.rows.push(r);
+      else map.set(r.id_cpl, { kode_cpl: r.kode_cpl, singkatan_cpl: r.singkatan_cpl, rows: [r] });
+    }
+    return Array.from(map.values());
+  }, [addIkRows]);
+
+  const saveAdd = async () => {
+    if (!selectedCpmk) return;
+    setAddSaving(true); setError(null);
+    try {
+      const id_ik_list = addIkRows.filter((r: IkPickRow) => r.mapped).map((r: IkPickRow) => r.id_ik);
+      const res = await fetch('/api/admin/mapping-cpmk-ik', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id_cpmk: selectedCpmk.id_cpmk, id_ik_list }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
+      else { setSuccess(json.message || 'Tersimpan.'); closeAddModal(); fetchData(activeKur); }
+    } catch { setError('Tidak dapat terhubung ke server.'); }
+    finally { setAddSaving(false); }
+  };
+
   return (
   <div className="space-y-6">
     <div className="flex items-start gap-3">
@@ -129,6 +236,9 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
           {kurList.map((k: KurOpt) => <option key={k.id_kurikulum} value={k.kode}>{k.kode}{k.is_active === 1 ? ' (aktif)' : ''}</option>)}
         </select>
       </div>
+      <button type="button" onClick={openAddModal} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-md">
+        <Plus className="w-4 h-4" /> Tambah Mapping
+      </button>
     </div>
 
     {!loading && ikList.length > 0 && (() => {
@@ -247,6 +357,120 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
                   <button onClick={closeDetail} disabled={saving} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
                   <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeAddModal}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Tambah Mapping CPMK → IK</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {!selectedMk ? 'Langkah 1: pilih Mata Kuliah.' : !selectedCpmk ? <>Langkah 2: MK <span className="font-mono">{selectedMk.kode_mk}</span> · pilih CPMK.</> : <>Langkah 3: CPMK <span className="font-mono">{selectedCpmk.kode_cpmk}</span> · pilih IK yang didukung.</>}
+                </p>
+              </div>
+              <button onClick={closeAddModal} className="p-1 rounded-md hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+
+            {!selectedMk ? (
+              <>
+                <div className="px-4 pt-3">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    <input type="text" autoFocus value={addMkSearch} onChange={(e: ChangeEvent<HTMLInputElement>) => setAddMkSearch(e.target.value)} placeholder="Cari kode / nama mata kuliah..." className="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                  {addCpmkLoading ? (
+                    <div className="py-12 flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Memuat mata kuliah…</div>
+                  ) : filteredMkOptions.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-gray-500">Tidak ada mata kuliah ditemukan.</div>
+                  ) : filteredMkOptions.map((m: MkOption) => (
+                    <button key={m.id_mata_kuliah} type="button" onClick={() => pickMkForAdd(m)} className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-200 rounded-lg text-left hover:bg-indigo-50 transition-colors">
+                      <span className="text-xs"><span className="font-mono font-semibold text-indigo-700">{m.kode_mk}</span><span className="text-gray-700"> — {m.nama_mk}</span></span>
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap">{m.jumlah_cpmk} CPMK</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="p-4 border-t border-gray-100 flex justify-end">
+                  <button onClick={closeAddModal} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
+                </div>
+              </>
+            ) : !selectedCpmk ? (
+              <>
+                <div className="px-4 pt-3">
+                  <button type="button" onClick={backToPickMk} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Ganti Mata Kuliah
+                  </button>
+                </div>
+                <div className="px-4 pt-3">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    <input type="text" autoFocus value={addCpmkSearch} onChange={(e: ChangeEvent<HTMLInputElement>) => setAddCpmkSearch(e.target.value)} placeholder="Cari kode CPMK / deskripsi..." className="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                  {cpmkInSelectedMk.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-gray-500">Tidak ada CPMK pada MK ini. Tambahkan CPMK di menu Kelola CPMK terlebih dulu.</div>
+                  ) : cpmkInSelectedMk.map((c: CpmkPickRow) => (
+                    <button key={c.id_cpmk} type="button" onClick={() => pickCpmkForAdd(c)} className="w-full flex items-start gap-2 px-3 py-2 border border-gray-200 rounded-lg text-left hover:bg-indigo-50 transition-colors">
+                      <span className="font-mono text-xs font-semibold text-indigo-700 mt-0.5">{c.kode_cpmk}</span>
+                      <span className="text-xs text-gray-700">{c.deskripsi_id}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="p-4 border-t border-gray-100 flex justify-end">
+                  <button onClick={closeAddModal} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-4 pt-3">
+                  <button type="button" onClick={backToPickCpmk} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Ganti CPMK
+                  </button>
+                </div>
+                <div className="px-4 pt-3"><div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-xs text-indigo-900"><strong>Deskripsi CPMK:</strong> {selectedCpmk.deskripsi_id}</div></div>
+
+                <div className="px-4 pt-3 flex flex-wrap gap-2 justify-end items-center">
+                  <div className="px-3 py-1.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {addSelectedCount} IK dipilih
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                  {addIkLoading ? (
+                    <div className="py-12 flex items-center justify-center text-gray-500"><Loader2 className="w-5 h-5 animate-spin mr-2" /> Memuat IK…</div>
+                  ) : groupedAddIk.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-gray-500">Tidak ada IK pada kurikulum ini.</div>
+                  ) : groupedAddIk.map((g: { kode_cpl: string; singkatan_cpl: string; rows: IkPickRow[] }, idx: number) => (
+                    <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center gap-2">
+                        <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">{g.singkatan_cpl}</span>
+                        <span className="font-mono text-xs text-gray-700">{g.kode_cpl}</span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {g.rows.map((r: IkPickRow) => (
+                          <label key={r.id_ik} className={`flex items-start gap-2 px-3 py-2 cursor-pointer text-xs ${r.mapped ? 'bg-indigo-50/40' : ''}`}>
+                            <input type="checkbox" checked={r.mapped} onChange={() => toggleAddIk(r.id_ik)} className="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                            <span><span className="font-mono font-semibold text-indigo-700">{r.kode_ik}</span><span className="text-gray-700"> — {r.deskripsi}</span></span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
+                  <button onClick={closeAddModal} disabled={addSaving} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
+                  <button onClick={saveAdd} disabled={addSaving} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">
+                    {addSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
                   </button>
                 </div>
               </>
