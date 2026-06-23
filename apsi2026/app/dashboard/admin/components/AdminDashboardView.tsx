@@ -278,6 +278,10 @@ export default function AdminDashboardView({ sessionUser, onNavigate }: AdminDas
               <span className="text-sm font-medium">Upload Data CPL/IK/CPMK</span>
               <Upload className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
             </button>
+            <button type="button" onClick={() => onNavigate('upload')} className="w-full flex items-center justify-between p-3 border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded-lg transition-colors group">
+              <span className="text-sm font-medium">Upload Data Dosen</span>
+              <UserCheck className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
+            </button>
             <button type="button" onClick={() => onNavigate('kelas')} className="w-full flex items-center justify-between p-3 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors group">
               <span className="text-sm font-medium">Kelola Kelas Tayang</span>
               <BookOpen className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />

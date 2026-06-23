@@ -59,7 +59,7 @@ export default function AdminDashboard() {
     { id: 'matkul', label: 'Kelola Mata Kuliah', icon: <BookOpen className="w-5 h-5" /> },
     { id: 'kelas', label: 'Kelola Kelas Tayang', icon: <MonitorPlay className="w-5 h-5" /> },
     { id: 'mapping', label: 'Mapping CPMK-IK', icon: <GitMerge className="w-5 h-5" /> },
-    { id: 'bobot', label: 'Kelola Bobot', icon: <Scale className="w-5 h-5" /> },
+    { id: 'bobot', label: 'Kelola Bobot IK', icon: <Scale className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {

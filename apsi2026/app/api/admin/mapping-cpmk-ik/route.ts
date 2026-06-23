@@ -6,12 +6,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Mapping CPMK -> IK dengan bobot_persen.
- * Rule: SUM(bobot_persen) per id_ik HARUS = 100 (toleransi 0.01).
+ * Mapping CPMK -> IK (tanpa bobot — engine v_nilai_ik_per_mhs memakai rata-rata CPMK per IK).
  *
  * GET  ?kur=K24                  -> { ikList, kurList, kurikulumActive }
  * GET  ?kur=K24&id_ik=12         -> { ik, cpmkList }
- * PUT  body { id_ik, items: [{ id_cpmk, bobot_persen }] } -> validasi sum=100
+ * PUT  body { id_ik, id_cpmk_list: number[] } -> ganti mapping CPMK untuk IK ini
  */
 
 export async function GET(req: NextRequest) {
@@ -62,10 +61,10 @@ export async function GET(req: NextRequest) {
       if (cpmkErr) throw cpmkErr;
 
       const cpmkIds = (cpmkRows ?? []).map((c) => c.id_cpmk);
-      const { data: bobotRows } = cpmkIds.length
-        ? await admin.from('mapping_cpmk_ik').select('id_cpmk, bobot_persen').eq('id_ik', id_ik).in('id_cpmk', cpmkIds)
+      const { data: mappedRows } = cpmkIds.length
+        ? await admin.from('mapping_cpmk_ik').select('id_cpmk').eq('id_ik', id_ik).in('id_cpmk', cpmkIds)
         : { data: [] as any[] };
-      const bobotMap = new Map((bobotRows ?? []).map((b) => [b.id_cpmk, Number(b.bobot_persen)]));
+      const mappedSet = new Set((mappedRows ?? []).map((b) => b.id_cpmk));
 
       const cpmkList = (cpmkRows ?? [])
         .map((c: any) => ({
@@ -76,7 +75,7 @@ export async function GET(req: NextRequest) {
           kode_mk: c.mata_kuliah?.kode_mk,
           nama_mk: c.mata_kuliah?.nama_mk,
           singkatan_mk: c.mata_kuliah?.singkatan,
-          bobot_persen: bobotMap.get(c.id_cpmk) ?? 0,
+          mapped: mappedSet.has(c.id_cpmk),
         }))
         .sort((a: any, b: any) => (a.kode_mk ?? '').localeCompare(b.kode_mk ?? ''));
 
@@ -97,14 +96,12 @@ export async function GET(req: NextRequest) {
     if (ikListErr) throw ikListErr;
 
     const ikIds = (ikRows ?? []).map((r) => r.id_ik);
-    const { data: bobotAll } = ikIds.length
-      ? await admin.from('mapping_cpmk_ik').select('id_ik, bobot_persen').in('id_ik', ikIds)
+    const { data: mappingAll } = ikIds.length
+      ? await admin.from('mapping_cpmk_ik').select('id_ik').in('id_ik', ikIds)
       : { data: [] as any[] };
-    const sumByIk = new Map<number, number>();
     const countByIk = new Map<number, number>();
-    for (const b of bobotAll ?? []) {
-      sumByIk.set(b.id_ik, (sumByIk.get(b.id_ik) ?? 0) + Number(b.bobot_persen));
-      if (Number(b.bobot_persen) > 0) countByIk.set(b.id_ik, (countByIk.get(b.id_ik) ?? 0) + 1);
+    for (const m of mappingAll ?? []) {
+      countByIk.set(m.id_ik, (countByIk.get(m.id_ik) ?? 0) + 1);
     }
 
     const ikList = (ikRows ?? [])
@@ -118,7 +115,6 @@ export async function GET(req: NextRequest) {
           singkatan_cpl: cpl?.singkatan,
           id_kurikulum: targetKur.id_kurikulum,
           kode_kurikulum: targetKur.kode,
-          sum_bobot: Number(sumByIk.get(r.id_ik) ?? 0),
           jumlah_cpmk: countByIk.get(r.id_ik) ?? 0,
           _urutanCpl: cpl?.urutan ?? 0,
           urutan: r.urutan,
@@ -140,40 +136,27 @@ export async function PUT(req: NextRequest) {
     await requireRole(req, ['admin']);
     const body = await req.json().catch(() => ({}));
     const id_ik = Number(body?.id_ik);
-    const items: Array<{ id_cpmk: number; bobot_persen: number }> = Array.isArray(body?.items) ? body.items : [];
+    const idCpmkListRaw: unknown[] = Array.isArray(body?.id_cpmk_list) ? body.id_cpmk_list : [];
     if (!Number.isInteger(id_ik) || id_ik <= 0) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'id_ik tidak valid.' }, { status: 400 });
     }
 
-    const cleaned: Array<{ id_cpmk: number; bobot_persen: number }> = [];
-    for (const it of items) {
-      const idC = Number(it?.id_cpmk);
-      const bb = Number(it?.bobot_persen);
-      if (!Number.isInteger(idC) || idC <= 0) continue;
-      if (!Number.isFinite(bb) || bb < 0 || bb > 100) {
-        return NextResponse.json({ success: false, error: 'BAD_BOBOT', message: `Bobot CPMK id=${idC} harus 0..100.` }, { status: 400 });
-      }
-      if (bb > 0) cleaned.push({ id_cpmk: idC, bobot_persen: Number(bb.toFixed(3)) });
-    }
-
-    const sum = cleaned.reduce((a, b) => a + b.bobot_persen, 0);
-    if (cleaned.length > 0 && Math.abs(sum - 100) > 0.01) {
-      return NextResponse.json(
-        { success: false, error: 'BOBOT_NOT_100', message: `Total bobot CPMK untuk IK ini = ${sum.toFixed(3)}% (harus 100%).` },
-        { status: 400 },
-      );
+    const idCpmkList: number[] = [];
+    for (const v of idCpmkListRaw) {
+      const n = Number(v);
+      if (Number.isInteger(n) && n > 0 && !idCpmkList.includes(n)) idCpmkList.push(n);
     }
 
     const admin = createSupabaseAdminClient();
     await admin.from('mapping_cpmk_ik').delete().eq('id_ik', id_ik);
-    if (cleaned.length > 0) {
-      const { error: insErr } = await admin.from('mapping_cpmk_ik').insert(cleaned.map((it) => ({ id_cpmk: it.id_cpmk, id_ik, bobot_persen: it.bobot_persen })));
+    if (idCpmkList.length > 0) {
+      const { error: insErr } = await admin.from('mapping_cpmk_ik').insert(idCpmkList.map((id_cpmk) => ({ id_cpmk, id_ik, bobot_persen: 0 })));
       if (insErr) throw insErr;
     }
 
     return NextResponse.json({
       success: true,
-      message: cleaned.length === 0 ? 'Semua mapping CPMK->IK untuk indikator ini telah dihapus.' : `Tersimpan: ${cleaned.length} CPMK (total ${sum.toFixed(3)}%).`,
+      message: idCpmkList.length === 0 ? 'Semua mapping CPMK->IK untuk indikator ini telah dihapus.' : `Tersimpan: ${idCpmkList.length} CPMK dipetakan.`,
     });
   } catch (err) {
     const a = handleAuthError(err); if (a) return a;

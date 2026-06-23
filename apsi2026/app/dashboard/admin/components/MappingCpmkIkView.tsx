@@ -1,7 +1,7 @@
 'use client';
 
 import { UserSession } from '../../../data/users';
-import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, RotateCcw, Divide, Edit3 } from 'lucide-react';
+import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, Edit3 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 
 interface MappingCpmkIkViewProps { sessionUser: UserSession; }
@@ -10,10 +10,10 @@ interface IkRow {
   id_ik: number; kode_ik: string; deskripsi: string;
   kode_cpl: string; singkatan_cpl: string;
   id_kurikulum: number; kode_kurikulum: string;
-  sum_bobot: number; jumlah_cpmk: number;
+  jumlah_cpmk: number;
 }
 interface KurOpt { id_kurikulum: number; kode: string; nama: string; is_active: number; }
-interface CpmkRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; bobot_persen: number; }
+interface CpmkRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; mapped: boolean; }
 interface IkDetail { id_ik: number; kode_ik: string; deskripsi: string; id_cpl: number; kode_cpl: string; singkatan_cpl: string; id_kurikulum: number; kode_kurikulum: string; }
 
 function authHeaders(): Record<string, string> {
@@ -77,34 +77,18 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
   };
   const closeDetail = () => { if (!saving) { setShowDetail(false); setDetailIk(null); setDetailRows([]); } };
 
-  const setBobot = (id_cpmk: number, raw: string) => {
-    const v = raw === '' ? 0 : Number(raw);
-    const clamped = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
-    setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => r.id_cpmk === id_cpmk ? { ...r, bobot_persen: clamped } : r));
+  const toggleMapped = (id_cpmk: number) => {
+    setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => r.id_cpmk === id_cpmk ? { ...r, mapped: !r.mapped } : r));
   };
 
-  const sumBobot = useMemo(() => detailRows.reduce((a: number, r: CpmkRow) => a + (r.bobot_persen || 0), 0), [detailRows]);
-  const aktifCount = useMemo(() => detailRows.filter((r: CpmkRow) => r.bobot_persen > 0).length, [detailRows]);
-  const sumValid = Math.abs(sumBobot - 100) < 0.01 || aktifCount === 0;
-
-  const distribusiMerata = () => {
-    const aktif = detailRows.filter((r: CpmkRow) => r.bobot_persen > 0);
-    if (aktif.length === 0) {
-      setError('Pilih dulu minimal 1 CPMK (set bobot > 0) sebelum membagi merata.'); return;
-    }
-    const each = Number((100 / aktif.length).toFixed(3));
-    const ids = new Set(aktif.map((r: CpmkRow) => r.id_cpmk));
-    setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => ids.has(r.id_cpmk) ? { ...r, bobot_persen: each } : r));
-  };
-  const resetAll = () => setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => ({ ...r, bobot_persen: 0 })));
+  const selectedCount = useMemo(() => detailRows.filter((r: CpmkRow) => r.mapped).length, [detailRows]);
 
   const save = async () => {
     if (!detailIk) return;
-    if (!sumValid) { setError(`Total bobot = ${sumBobot.toFixed(3)}%. Harus 100% (atau kosongkan semua).`); return; }
     setSaving(true); setError(null);
     try {
-      const items = detailRows.filter((r: CpmkRow) => r.bobot_persen > 0).map((r: CpmkRow) => ({ id_cpmk: r.id_cpmk, bobot_persen: Number(r.bobot_persen) }));
-      const res = await fetch('/api/admin/mapping-cpmk-ik', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id_ik: detailIk.id_ik, items }) });
+      const id_cpmk_list = detailRows.filter((r: CpmkRow) => r.mapped).map((r: CpmkRow) => r.id_cpmk);
+      const res = await fetch('/api/admin/mapping-cpmk-ik', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id_ik: detailIk.id_ik, id_cpmk_list }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
       else { setSuccess(json.message || 'Tersimpan.'); setShowDetail(false); fetchData(activeKur); }
@@ -127,7 +111,7 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
       <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center mt-1"><Network className="w-5 h-5" /></div>
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Mapping CPMK → IK</h1>
-        <p className="text-gray-600 mt-1">Atur bobot kontribusi tiap CPMK terhadap Indikator Kinerja. Total bobot CPMK per IK harus 100%.</p>
+        <p className="text-gray-600 mt-1">Pilih CPMK yang mendukung tiap Indikator Kinerja. Engine memakai rata-rata nilai CPMK → IK (tanpa bobot).</p>
       </div>
     </div>
 
@@ -148,15 +132,12 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
     </div>
 
     {!loading && ikList.length > 0 && (() => {
-      const validCount = ikList.filter((r: IkRow) => Math.abs(Number(r.sum_bobot) - 100) < 0.01 || Number(r.sum_bobot) === 0).length;
-      const sudahMap = ikList.filter((r: IkRow) => Number(r.sum_bobot) > 0).length;
-      const lengkap = ikList.filter((r: IkRow) => Math.abs(Number(r.sum_bobot) - 100) < 0.01).length;
+      const sudahMap = ikList.filter((r: IkRow) => Number(r.jumlah_cpmk) > 0).length;
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Total IK</p><p className="text-2xl font-bold text-gray-900">{ikList.length}</p></div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Sudah Dipetakan</p><p className="text-2xl font-bold text-blue-700">{sudahMap}</p></div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Bobot Lengkap (=100%)</p><p className="text-2xl font-bold text-green-700">{lengkap}</p></div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Belum Valid</p><p className="text-2xl font-bold text-amber-700">{ikList.length - validCount}</p></div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Sudah Dipetakan</p><p className="text-2xl font-bold text-green-700">{sudahMap}</p></div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3"><p className="text-xs text-gray-500">Belum Dipetakan</p><p className="text-2xl font-bold text-amber-700">{ikList.length - sudahMap}</p></div>
         </div>
       );
     })()}
@@ -173,17 +154,14 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
               <tr>
                 <th className="px-4 py-2 text-left w-32">CPL / IK</th>
                 <th className="px-4 py-2 text-left">Deskripsi</th>
-                <th className="px-4 py-2 text-center w-24">CPMK Aktif</th>
-                <th className="px-4 py-2 text-center w-32">Total Bobot</th>
+                <th className="px-4 py-2 text-center w-24">CPMK Terpetakan</th>
                 <th className="px-4 py-2 text-center w-32">Status</th>
                 <th className="px-4 py-2 text-right w-28">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map((r: IkRow) => {
-                const sb = Number(r.sum_bobot);
-                const empty = sb === 0;
-                const valid = Math.abs(sb - 100) < 0.01;
+                const empty = Number(r.jumlah_cpmk) === 0;
                 return (
                   <tr key={r.id_ik} className="hover:bg-gray-50">
                     <td className="px-4 py-2">
@@ -192,11 +170,9 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
                     </td>
                     <td className="px-4 py-2 text-gray-700">{r.deskripsi}</td>
                     <td className="px-4 py-2 text-center text-gray-700">{r.jumlah_cpmk}</td>
-                    <td className={`px-4 py-2 text-center font-semibold ${sb === 100 ? 'text-green-700' : sb === 0 ? 'text-gray-400' : 'text-amber-700'}`}>{sb.toFixed(2)}%</td>
                     <td className="px-4 py-2 text-center">
-                      {empty ? <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">Belum diatur</span>
-                        : valid ? <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">Valid (100%)</span>
-                        : <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Tidak valid</span>}
+                      {empty ? <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">Belum dipetakan</span>
+                        : <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">Sudah dipetakan</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button onClick={() => openDetail(r)} className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md">
@@ -228,13 +204,9 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
               <>
                 {detailIk && <div className="px-4 pt-3"><div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-xs text-indigo-900"><strong>Deskripsi IK:</strong> {detailIk.deskripsi}</div></div>}
 
-                <div className="px-4 pt-3 flex flex-wrap gap-2 justify-between items-center">
-                  <div className="flex gap-2">
-                    <button onClick={distribusiMerata} type="button" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"><Divide className="w-3.5 h-3.5" /> Distribusi merata (CPMK aktif)</button>
-                    <button onClick={resetAll} type="button" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"><RotateCcw className="w-3.5 h-3.5" /> Reset 0</button>
-                  </div>
-                  <div className={`px-3 py-1.5 rounded-md text-xs font-semibold ${sumValid ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                    Total: {sumBobot.toFixed(3)}% / 100% · {aktifCount} CPMK aktif
+                <div className="px-4 pt-3 flex flex-wrap gap-2 justify-end items-center">
+                  <div className="px-3 py-1.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {selectedCount} CPMK dipilih
                   </div>
                 </div>
 
@@ -252,16 +224,16 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
                           <tr>
                             <th className="px-3 py-1 text-left w-24">Kode</th>
                             <th className="px-3 py-1 text-left">Deskripsi</th>
-                            <th className="px-3 py-1 text-center w-28">Bobot (%)</th>
+                            <th className="px-3 py-1 text-center w-20">Dipetakan</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {g.rows.map((r: CpmkRow) => (
-                            <tr key={r.id_cpmk} className={r.bobot_persen > 0 ? 'bg-indigo-50/40' : ''}>
+                            <tr key={r.id_cpmk} className={r.mapped ? 'bg-indigo-50/40' : ''}>
                               <td className="px-3 py-1.5 font-mono text-xs text-gray-800">{r.kode_cpmk}</td>
                               <td className="px-3 py-1.5 text-xs text-gray-700">{r.deskripsi_id}</td>
                               <td className="px-3 py-1.5 text-center">
-                                <input type="number" min={0} max={100} step={0.001} value={r.bobot_persen === 0 ? '' : r.bobot_persen} onChange={(e: ChangeEvent<HTMLInputElement>) => setBobot(r.id_cpmk, e.target.value)} placeholder="0" className="w-20 text-xs text-center border-gray-300 rounded-md shadow-sm" />
+                                <input type="checkbox" checked={r.mapped} onChange={() => toggleMapped(r.id_cpmk)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                               </td>
                             </tr>
                           ))}
@@ -273,7 +245,7 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
 
                 <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
                   <button onClick={closeDetail} disabled={saving} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
-                  <button onClick={save} disabled={saving || (!sumValid && aktifCount > 0)} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">
+                  <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
                   </button>
                 </div>
