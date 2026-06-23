@@ -10,6 +10,7 @@ import {
 type Option = { value: string; label: string };
 type CplChartRow = { id: string; name: string; target: number; realisasi: number; deskripsi?: string };
 type CriticalIk = { kode: string; nilai: number; target: number; deskripsi: string; cpl: string };
+type IncompleteClass = { id_kelas: number; label: string; status: string };
 type DashboardData = {
   options: {
     tahun: string[];
@@ -21,8 +22,12 @@ type DashboardData = {
   };
   stats: {
     rata_cpl: number;
+    cpl_tercapai: number;
+    cpl_total: number;
     cpl_belum: number;
     cpl_belum_label: string;
+    ik_bermasalah: number;
+    mk_belum_upload: number;
   };
   mutu: {
     kualitas_asesmen: number;
@@ -32,7 +37,10 @@ type DashboardData = {
   targetRealisasiCPL: CplChartRow[];
   criticalCpl: CplChartRow[];
   criticalIk: CriticalIk[];
+  incompleteClasses: IncompleteClass[];
 };
+
+type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
 
 function authHeaders(): Record<string, string> {
   const raw = sessionStorage.getItem('currentUser');
@@ -123,6 +131,123 @@ export default function JamuDashboardView() {
   const criticalCpl = data?.criticalCpl ?? [];
   const criticalIk = data?.criticalIk ?? [];
 
+  const handleDownloadPdf = async () => {
+    setIsDownloadOpen(false);
+    if (!data) return;
+
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
+
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 14;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SICPL - Portal JAMU', marginX, 16);
+    doc.setFontSize(11);
+    doc.text('Laporan Evaluasi Mutu Program Studi', marginX, 23);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(
+      `Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`,
+      marginX,
+      29,
+    );
+
+    doc.setFontSize(9);
+    const filterLine = `Tahun Ajar: ${filterTahun}  ·  Semester: ${filterSemester}  ·  Angkatan: ${filterAngkatan}  ·  CPL: ${filterCPL}`;
+    doc.text(doc.splitTextToSize(`Filter: ${filterLine}`, 180), marginX, 37);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      doc.splitTextToSize(
+        `Rata-rata CPL: ${data.stats.rata_cpl}   ·   CPL di Bawah Target: ${data.stats.cpl_belum} CPL   ·   Kualitas Asesmen: ${data.mutu.kualitas_asesmen}%   ·   Rekomendasi Mutu Aktif: ${data.mutu.rekomendasi_aktif}   ·   Usulan Wording Pending: ${data.mutu.wording_pending}`,
+        180,
+      ),
+      marginX,
+      50,
+    );
+    doc.setFont('helvetica', 'normal');
+
+    autoTable(doc, {
+      startY: 60,
+      margin: { left: marginX, right: marginX },
+      head: [['CPL', 'Nama', 'Target', 'Realisasi', 'Status']],
+      body: data.targetRealisasiCPL.map((c) => [
+        c.id,
+        c.name,
+        c.target,
+        c.realisasi,
+        c.realisasi >= c.target ? 'Tercapai' : 'Belum Tercapai',
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [79, 70, 229] },
+    });
+
+    let cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 60) + 10;
+    if (cursorY > pageHeight - 40) {
+      doc.addPage();
+      cursorY = 16;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CPL & IK Kritis', marginX, cursorY);
+    doc.setFont('helvetica', 'normal');
+    cursorY += 5;
+
+    const criticalRows = [
+      ...criticalCpl.map((c) => [c.id, c.deskripsi || c.name, c.realisasi, c.target]),
+      ...criticalIk.map((ik) => [ik.kode, ik.deskripsi, ik.nilai, ik.target]),
+    ];
+
+    if (criticalRows.length > 0) {
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [['Kode', 'Deskripsi', 'Nilai', 'Target']],
+        body: criticalRows,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [225, 29, 72] },
+      });
+      cursorY = ((doc as unknown as JsPdfWithAutoTable).lastAutoTable?.finalY ?? cursorY) + 10;
+    } else {
+      doc.setFontSize(9);
+      doc.text('Tidak ada CPL/IK kritis pada filter ini.', marginX, cursorY);
+      cursorY += 10;
+    }
+
+    if (cursorY > pageHeight - 40) {
+      doc.addPage();
+      cursorY = 16;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Status Data Belum Lengkap', marginX, cursorY);
+    doc.setFont('helvetica', 'normal');
+    cursorY += 5;
+
+    const incomplete = data.incompleteClasses ?? [];
+    if (incomplete.length > 0) {
+      autoTable(doc, {
+        startY: cursorY,
+        margin: { left: marginX, right: marginX },
+        head: [['Mata Kuliah / Kelas', 'Status']],
+        body: incomplete.map((k) => [k.label, k.status]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [100, 116, 139] },
+      });
+    } else {
+      doc.setFontSize(9);
+      doc.text('Semua kelas pada filter ini sudah punya upload nilai sukses.', marginX, cursorY);
+    }
+
+    doc.save(`Laporan_Evaluasi_Mutu_JAMU_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -142,7 +267,11 @@ export default function JamuDashboardView() {
 
           {isDownloadOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10">
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+              <button
+                onClick={handleDownloadPdf}
+                disabled={!data}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
                 <FileText className="w-4 h-4 text-red-500" /> Export PDF
               </button>
               <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">

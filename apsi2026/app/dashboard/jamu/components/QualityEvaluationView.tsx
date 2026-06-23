@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, ClipboardList, Send, Download } from 'lucide-react';
+import { Plus, ClipboardList, Send } from 'lucide-react';
 
 interface Recommendation {
   id: string;
@@ -164,9 +164,6 @@ export default function QualityEvaluationView() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
           <div className="p-5 border-b border-gray-200 flex items-center justify-between">
             <h3 className="font-bold text-gray-900 text-lg">Daftar Rekomendasi Mutu Aktif</h3>
-            <button className="flex items-center gap-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800">
-              <Download className="w-4 h-4" /> Export (.xlsx)
-            </button>
           </div>
 
           <div className="overflow-x-auto">
