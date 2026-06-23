@@ -195,6 +195,31 @@ export async function notifyKoPengampuOnEdit(opts: {
   }
 }
 
+// ── Internal: insert notifikasi in-app untuk ko-pengampu ──────────────────
+async function insertNotifikasiInApp(opts: {
+  koPengampu: KoPengampuRow[];
+  judul: string;
+  pesan: string;
+  jenis: 'upload_nilai' | 'edit_nilai';
+  id_kelas: number;
+}): Promise<void> {
+  if (opts.koPengampu.length === 0) return;
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from('notifikasi').insert(
+      opts.koPengampu.map((k) => ({
+        id_staff: k.id_staff,
+        judul: opts.judul,
+        pesan: opts.pesan,
+        jenis: opts.jenis,
+        id_kelas: opts.id_kelas,
+      })),
+    );
+  } catch (err) {
+    console.error('[insertNotifikasiInApp] gagal:', err);
+  }
+}
+
 // ── Public: notifikasi upload SIAKAD ──────────────────────────────────────
 export async function notifyKoPengampuOnUpload(opts: {
   id_kelas: number;
@@ -215,6 +240,14 @@ export async function notifyKoPengampuOnUpload(opts: {
 
     const kelasLabel = `${kelas.kode_mk} ${kelas.nama_mk}${kelas.kode_kelas ? ` (Kelas ${kelas.kode_kelas})` : ''
       }`;
+
+    await insertNotifikasiInApp({
+      koPengampu,
+      judul: `Upload nilai — ${kelas.kode_mk} ${kelas.kode_kelas ?? ''}`.trim(),
+      pesan: `${editor.nama_editor} (${editor.kode_dosen}) mengunggah nilai SIAKAD ke kelas ${kelasLabel} (${kelas.tahun_akademik} ${kelas.semester}). Berhasil: ${opts.jumlahBerhasil}, Gagal: ${opts.jumlahGagal}.`,
+      jenis: 'upload_nilai',
+      id_kelas: opts.id_kelas,
+    });
 
     const subject = `[SICPL] Upload SIAKAD — ${kelas.kode_mk} ${kelas.kode_kelas ?? ''}`.trim();
     const html = buildEmailHtml({

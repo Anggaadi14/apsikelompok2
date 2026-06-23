@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const { data: rows, error } = await admin
       .from('indikator_kinerja')
       .select(
-        `id_ik, id_cpl, kode_ik, deskripsi, urutan,
+        `id_ik, id_cpl, kode_ik, deskripsi, deskripsi_en, urutan,
          cpl:id_cpl ( kode_cpl, singkatan, id_kurikulum,
            kurikulum:id_kurikulum ( id_kurikulum, kode, tahun_mulai ) )`,
       );
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       id_cpl: r.id_cpl,
       kode_ik: r.kode_ik,
       deskripsi: r.deskripsi,
+      deskripsi_en: r.deskripsi_en,
       urutan: r.urutan,
       kode_cpl: r.cpl?.kode_cpl,
       singkatan_cpl: r.cpl?.singkatan,
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
     const id_cpl = Number(body?.id_cpl);
     const kode_ik = String(body?.kode_ik || '').trim();
     const deskripsi = String(body?.deskripsi || '').trim();
+    const deskripsi_en = body?.deskripsi_en ? String(body.deskripsi_en).trim() : null;
     const urutan = Number.isFinite(Number(body?.urutan)) ? Number(body.urutan) : 0;
 
     if (!Number.isInteger(id_cpl) || id_cpl <= 0) {
@@ -85,6 +87,9 @@ export async function POST(req: NextRequest) {
     }
     if (!kode_ik || kode_ik.length > 20) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Kode IK wajib (maks 20 karakter).' }, { status: 400 });
+    }
+    if (!/^[A-Za-z]+-[0-9]+$/.test(kode_ik)) {
+      return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Format Kode IK harus huruf-angka, contoh: IK-1.' }, { status: 400 });
     }
     if (!deskripsi) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Deskripsi IK wajib diisi.' }, { status: 400 });
@@ -99,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     const { data: ins, error: insErr } = await admin
       .from('indikator_kinerja')
-      .insert({ id_cpl, kode_ik, deskripsi, urutan })
+      .insert({ id_cpl, kode_ik, deskripsi, deskripsi_en, urutan })
       .select('id_ik')
       .single();
     if (insErr) throw insErr;

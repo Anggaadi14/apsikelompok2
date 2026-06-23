@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 interface MatkulManagementViewProps { sessionUser: UserSession; }
 
 interface MkItem {
-  id_mata_kuliah: number; kode_mk: string; nama_mk: string; sks: number; singkatan: string | null;
+  id_mata_kuliah: number; kode_mk: string; nama_mk: string; nama_mk_en: string | null; sks: number; singkatan: string | null;
   jumlah_kurikulum: number; jumlah_cpmk: number;
 }
 interface LinkItem { id_mata_kuliah: number; id_kurikulum: number; is_wajib: number; semester_default: number | null; kode_kurikulum: string; }
@@ -35,6 +35,7 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
   const [submitting, setSubmitting] = useState(false);
   const [fKode, setFKode] = useState('');
   const [fNama, setFNama] = useState('');
+  const [fNamaEn, setFNamaEn] = useState('');
   const [fSks, setFSks] = useState<number>(3);
   const [fSingkatan, setFSingkatan] = useState('');
   const [fLinks, setFLinks] = useState<FormLink[]>([]);
@@ -63,20 +64,20 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
         if (!hasLink) return false;
       }
       if (!q) return true;
-      return r.kode_mk.toLowerCase().includes(q) || r.nama_mk.toLowerCase().includes(q) || (r.singkatan || '').toLowerCase().includes(q);
+      return r.kode_mk.toLowerCase().includes(q) || r.nama_mk.toLowerCase().includes(q) || (r.nama_mk_en || '').toLowerCase().includes(q) || (r.singkatan || '').toLowerCase().includes(q);
     });
   }, [mkList, links, filterKur, search]);
 
   const linksFor = (id_mk: number): LinkItem[] => links.filter((l: LinkItem) => l.id_mata_kuliah === id_mk);
 
   const openCreate = () => {
-    setEditId(null); setFKode(''); setFNama(''); setFSks(3); setFSingkatan('');
+    setEditId(null); setFKode(''); setFNama(''); setFNamaEn(''); setFSks(3); setFSingkatan('');
     const activeKur = kurList.find((k: KurOpt) => k.is_active === 1);
     setFLinks(activeKur ? [{ id_kurikulum: activeKur.id_kurikulum, is_wajib: true, semester_default: null }] : []);
     setShowModal(true); setError(null); setSuccess(null);
   };
   const openEdit = (r: MkItem) => {
-    setEditId(r.id_mata_kuliah); setFKode(r.kode_mk); setFNama(r.nama_mk); setFSks(Number(r.sks)); setFSingkatan(r.singkatan || '');
+    setEditId(r.id_mata_kuliah); setFKode(r.kode_mk); setFNama(r.nama_mk); setFNamaEn(r.nama_mk_en || ''); setFSks(Number(r.sks)); setFSingkatan(r.singkatan || '');
     setFLinks(linksFor(r.id_mata_kuliah).map((l: LinkItem) => ({ id_kurikulum: l.id_kurikulum, is_wajib: l.is_wajib === 1, semester_default: l.semester_default })));
     setShowModal(true); setError(null); setSuccess(null);
   };
@@ -97,7 +98,7 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
     e.preventDefault(); setSubmitting(true); setError(null);
     try {
       const body = {
-        kode_mk: fKode.trim(), nama_mk: fNama.trim(), sks: fSks,
+        kode_mk: fKode.trim(), nama_mk: fNama.trim(), nama_mk_en: fNamaEn.trim() || null, sks: fSks,
         singkatan: fSingkatan.trim() || null,
         links: fLinks.map((l: FormLink) => ({ id_kurikulum: l.id_kurikulum, is_wajib: l.is_wajib ? 1 : 0, semester_default: l.semester_default })),
       };
@@ -163,7 +164,8 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
               <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-2 text-left w-28">Kode MK</th>
-                  <th className="px-4 py-2 text-left">Nama</th>
+                  <th className="px-4 py-2 text-left">Nama (Indonesia)</th>
+                  <th className="px-4 py-2 text-left">Name (English)</th>
                   <th className="px-4 py-2 text-left w-24">Singkatan</th>
                   <th className="px-4 py-2 text-center w-16">SKS</th>
                   <th className="px-4 py-2 text-left w-56">Kurikulum</th>
@@ -178,6 +180,7 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
                     <tr key={r.id_mata_kuliah} className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-mono text-xs text-gray-800">{r.kode_mk}</td>
                       <td className="px-4 py-2 text-gray-800">{r.nama_mk}</td>
+                      <td className="px-4 py-2 text-gray-500 italic">{r.nama_mk_en || '-'}</td>
                       <td className="px-4 py-2 text-xs text-gray-600">{r.singkatan || '—'}</td>
                       <td className="px-4 py-2 text-center text-gray-700">{Number(r.sks)}</td>
                       <td className="px-4 py-2">
@@ -226,8 +229,12 @@ export default function MatkulManagementView({ sessionUser: _su }: MatkulManagem
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama MK *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama MK (Indonesia) *</label>
                 <input required type="text" value={fNama} onChange={(e: ChangeEvent<HTMLInputElement>) => setFNama(e.target.value)} placeholder="Manajemen Operasional" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama MK (English) <span className="text-gray-400 text-xs">(opsional)</span></label>
+                <input type="text" value={fNamaEn} onChange={(e: ChangeEvent<HTMLInputElement>) => setFNamaEn(e.target.value)} placeholder="Operations Management" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Singkatan <span className="text-gray-400 text-xs">(prefix CPMK, mis. "MO")</span></label>

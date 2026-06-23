@@ -26,6 +26,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       if (!v) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Nama MK wajib.' }, { status: 400 });
       patch.nama_mk = v;
     }
+    if (body.nama_mk_en !== undefined) {
+      const raw = body.nama_mk_en;
+      patch.nama_mk_en = raw === null || raw === '' ? null : String(raw).trim();
+    }
     if (body.singkatan !== undefined) {
       const raw = body.singkatan;
       patch.singkatan = raw === null || raw === '' ? null : String(raw).trim();

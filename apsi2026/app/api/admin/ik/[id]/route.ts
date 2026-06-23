@@ -19,12 +19,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (body.kode_ik !== undefined) {
       const v = String(body.kode_ik || '').trim();
       if (!v || v.length > 20) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Kode IK wajib (maks 20).' }, { status: 400 });
+      if (!/^[A-Za-z]+-[0-9]+$/.test(v)) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Format Kode IK harus huruf-angka, contoh: IK-1.' }, { status: 400 });
       patch.kode_ik = v;
     }
     if (body.deskripsi !== undefined) {
       const v = String(body.deskripsi || '').trim();
       if (!v) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Deskripsi wajib.' }, { status: 400 });
       patch.deskripsi = v;
+    }
+    if (body.deskripsi_en !== undefined) {
+      const raw = body.deskripsi_en;
+      patch.deskripsi_en = raw === null || raw === '' ? null : String(raw).trim();
     }
     if (body.urutan !== undefined) {
       patch.urutan = Number(body.urutan) || 0;

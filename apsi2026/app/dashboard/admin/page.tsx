@@ -81,7 +81,7 @@ export default function AdminDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <AdminDashboardView sessionUser={sessionUser} />;
+        return <AdminDashboardView sessionUser={sessionUser} onNavigate={setActiveTab} />;
       case 'users':
         return <UserManagementView sessionUser={sessionUser} />;
       case 'upload':
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
       case 'bobot':
         return <BobotIkCplView sessionUser={sessionUser} />;
       default:
-        return <AdminDashboardView sessionUser={sessionUser} />;
+        return <AdminDashboardView sessionUser={sessionUser} onNavigate={setActiveTab} />;
     }
   };
 

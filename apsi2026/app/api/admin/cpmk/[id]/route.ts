@@ -19,6 +19,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (body.kode_cpmk !== undefined) {
       const v = String(body.kode_cpmk || '').trim();
       if (!v || v.length > 30) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Kode CPMK wajib (maks 30).' }, { status: 400 });
+      if (!/^[A-Za-z]+-[0-9]+$/.test(v)) return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Format Kode CPMK harus huruf-angka, contoh: MO-1.' }, { status: 400 });
       patch.kode_cpmk = v;
     }
     if (body.deskripsi_id !== undefined) {

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 
 interface AdminDashboardViewProps {
   sessionUser: UserSession;
+  onNavigate: (tab: string) => void;
 }
 
 type Level = 'INFO' | 'SUCCESS' | 'ERROR' | 'WARNING';
@@ -64,7 +65,7 @@ function formatRelativeTime(iso: string): string {
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function AdminDashboardView({ sessionUser }: AdminDashboardViewProps) {
+export default function AdminDashboardView({ sessionUser, onNavigate }: AdminDashboardViewProps) {
   // Filter state — default akan di-set dari TA aktif setelah fetch.
   const [filterTaKode, setFilterTaKode] = useState<string>('');
   const [filterKur, setFilterKur] = useState<string>('');
@@ -269,26 +270,26 @@ export default function AdminDashboardView({ sessionUser }: AdminDashboardViewPr
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm h-fit">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Aksi Cepat</h3>
           <div className="space-y-3">
-            <a href="/dashboard/admin?tab=upload" className="w-full flex items-center justify-between p-3 border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded-lg transition-colors group">
+            <button type="button" onClick={() => onNavigate('upload')} className="w-full flex items-center justify-between p-3 border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded-lg transition-colors group">
               <span className="text-sm font-medium">Upload Data Mahasiswa</span>
               <Upload className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
-            </a>
-            <a href="/dashboard/admin?tab=upload" className="w-full flex items-center justify-between p-3 border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded-lg transition-colors group">
+            </button>
+            <button type="button" onClick={() => onNavigate('upload')} className="w-full flex items-center justify-between p-3 border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-700 rounded-lg transition-colors group">
               <span className="text-sm font-medium">Upload Data CPL/IK/CPMK</span>
               <Upload className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
-            </a>
-            <a href="/dashboard/admin?tab=kelas" className="w-full flex items-center justify-between p-3 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors group">
+            </button>
+            <button type="button" onClick={() => onNavigate('kelas')} className="w-full flex items-center justify-between p-3 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors group">
               <span className="text-sm font-medium">Kelola Kelas Tayang</span>
               <BookOpen className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-            </a>
-            <a href="/dashboard/admin?tab=users" className="w-full flex items-center justify-between p-3 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors group">
+            </button>
+            <button type="button" onClick={() => onNavigate('users')} className="w-full flex items-center justify-between p-3 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors group">
               <span className="text-sm font-medium">Manajemen User</span>
               <Users className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-            </a>
-            <a href="/dashboard/admin?tab=upload" className="w-full flex items-center justify-between p-3 border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 rounded-lg transition-colors group mt-4">
+            </button>
+            <button type="button" onClick={() => onNavigate('upload')} className="w-full flex items-center justify-between p-3 border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 rounded-lg transition-colors group mt-4">
               <span className="text-sm font-medium">Download Template Master</span>
               <Download className="w-4 h-4 text-emerald-400 group-hover:text-emerald-600" />
-            </a>
+            </button>
           </div>
         </div>
       </div>

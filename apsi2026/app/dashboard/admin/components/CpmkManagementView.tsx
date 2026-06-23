@@ -12,6 +12,8 @@ interface CpmkItem {
 }
 interface MkOpt { id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan: string | null; sks: number; }
 
+const KODE_CPMK_REGEX = /^[A-Za-z]+-[0-9]+$/;
+
 function authHeaders(): Record<string, string> {
   const raw = typeof window !== 'undefined' ? sessionStorage.getItem('currentUser') : null;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -25,6 +27,7 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterMk, setFilterMk] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -53,25 +56,31 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
     return cpmkList.filter((r: CpmkItem) => {
       if (filterMk !== 'all' && String(r.id_mata_kuliah) !== filterMk) return false;
       if (!q) return true;
-      return r.kode_cpmk.toLowerCase().includes(q) || r.deskripsi_id.toLowerCase().includes(q) || r.kode_mk.toLowerCase().includes(q) || r.nama_mk.toLowerCase().includes(q);
+      return r.kode_cpmk.toLowerCase().includes(q) || r.deskripsi_id.toLowerCase().includes(q) || (r.deskripsi_en ?? '').toLowerCase().includes(q) || r.kode_mk.toLowerCase().includes(q) || r.nama_mk.toLowerCase().includes(q);
     });
   }, [cpmkList, filterMk, search]);
 
-  const openCreate = () => { setEditId(null); setFIdMk(''); setFKode(''); setFDeskId(''); setFDeskEn(''); setFUrutan(0); setShowModal(true); setError(null); setSuccess(null); };
-  const openEdit = (r: CpmkItem) => { setEditId(r.id_cpmk); setFIdMk(String(r.id_mata_kuliah)); setFKode(r.kode_cpmk); setFDeskId(r.deskripsi_id); setFDeskEn(r.deskripsi_en || ''); setFUrutan(r.urutan); setShowModal(true); setError(null); setSuccess(null); };
+  const openCreate = () => { setEditId(null); setFIdMk(''); setFKode(''); setFDeskId(''); setFDeskEn(''); setFUrutan(0); setShowModal(true); setError(null); setSuccess(null); setFormError(null); };
+  const openEdit = (r: CpmkItem) => { setEditId(r.id_cpmk); setFIdMk(String(r.id_mata_kuliah)); setFKode(r.kode_cpmk); setFDeskId(r.deskripsi_id); setFDeskEn(r.deskripsi_en || ''); setFUrutan(r.urutan); setShowModal(true); setError(null); setSuccess(null); setFormError(null); };
   const closeModal = () => { if (!submitting) setShowModal(false); };
 
   const submit = async (e: FormEvent) => {
-    e.preventDefault(); setSubmitting(true); setError(null);
+    e.preventDefault(); setFormError(null);
+    const kodeTrimmed = fKode.trim();
+    if (!KODE_CPMK_REGEX.test(kodeTrimmed)) {
+      setFormError('Format Kode CPMK harus huruf-angka, contoh: MO-1.');
+      return;
+    }
+    setSubmitting(true);
     try {
-      const body = { id_mata_kuliah: Number(fIdMk), kode_cpmk: fKode.trim(), deskripsi_id: fDeskId.trim(), deskripsi_en: fDeskEn.trim() || null, urutan: fUrutan };
+      const body = { id_mata_kuliah: Number(fIdMk), kode_cpmk: kodeTrimmed, deskripsi_id: fDeskId.trim(), deskripsi_en: fDeskEn.trim() || null, urutan: fUrutan };
       const url = editId ? `/api/admin/cpmk/${editId}` : '/api/admin/cpmk';
       const method = editId ? 'PATCH' : 'POST';
       const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
+      if (!res.ok || !json.success) setFormError(json.message || 'Gagal menyimpan.');
       else { setSuccess(json.message || 'Tersimpan.'); setShowModal(false); fetchData(); }
-    } catch { setError('Tidak dapat terhubung ke server.'); }
+    } catch { setFormError('Tidak dapat terhubung ke server.'); }
     finally { setSubmitting(false); }
   };
 
@@ -128,7 +137,8 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                 <tr>
                   <th className="px-4 py-2 text-left w-28">Kode CPMK</th>
                   <th className="px-4 py-2 text-left w-48">Mata Kuliah</th>
-                  <th className="px-4 py-2 text-left">Deskripsi</th>
+                  <th className="px-4 py-2 text-left">Deskripsi (Indonesia)</th>
+                  <th className="px-4 py-2 text-left">Description (English)</th>
                   <th className="px-4 py-2 text-center w-20">Urutan</th>
                   <th className="px-4 py-2 text-right w-28">Aksi</th>
                 </tr>
@@ -142,6 +152,7 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                       <div className="text-xs text-gray-500">{r.nama_mk}</div>
                     </td>
                     <td className="px-4 py-2 text-gray-700">{r.deskripsi_id}</td>
+                    <td className="px-4 py-2 text-gray-500 italic">{r.deskripsi_en || '-'}</td>
                     <td className="px-4 py-2 text-center text-gray-600">{r.urutan}</td>
                     <td className="px-4 py-2 text-right">
                       <div className="inline-flex gap-1">
@@ -175,7 +186,13 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kode CPMK *</label>
-                  <input required type="text" maxLength={30} value={fKode} onChange={(e: ChangeEvent<HTMLInputElement>) => setFKode(e.target.value)} placeholder="MO-1" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
+                  <input
+                    required type="text" maxLength={30} value={fKode}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setFKode(e.target.value)}
+                    placeholder="MO-1"
+                    className={`w-full text-sm rounded-md shadow-sm ${fKode && !KODE_CPMK_REGEX.test(fKode.trim()) ? 'border-red-300 focus:border-red-400 focus:ring-red-200' : 'border-gray-300'}`}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Format: HURUF-ANGKA, contoh MO-1</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Urutan</label>
@@ -190,6 +207,7 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description (English) <span className="text-gray-400 text-xs">(opsional)</span></label>
                 <textarea rows={2} value={fDeskEn} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFDeskEn(e.target.value)} className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
               </div>
+              {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-700"><AlertCircle className="w-5 h-5 flex-shrink-0" /> {formError}</div>}
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={closeModal} disabled={submitting} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
                 <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">

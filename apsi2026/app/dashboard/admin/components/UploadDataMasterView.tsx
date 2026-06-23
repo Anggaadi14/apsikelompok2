@@ -57,7 +57,11 @@ const UPLOAD_TYPES: UploadType[] = [
     id: 'dosen',
     label: 'Data Dosen',
     desc: 'Upload daftar dosen pengajar',
-    wired: false,
+    wired: true,
+    endpoint: '/api/admin/import-dosen',
+    templateHref: '/templates/Template_Dosen.xlsx',
+    templateLabel: 'Template_Dosen.xlsx',
+    info: 'UPSERT by NIP/NIDN/NIK. Dosen yang sudah diimport bisa ditugaskan ke kelas lewat menu Kelola Kelas Tayang.',
   },
 ];
 

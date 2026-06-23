@@ -13,7 +13,6 @@ import {
 
 async function main() {
   log.step('SEED 1: Kurikulum + CPL + IK + mapping_ik_cpl')
-
   const db = getDb()
   const conn = await db.getConnection()
 

@@ -175,7 +175,8 @@ export default function CplManagementView({ sessionUser }: CplManagementViewProp
       c.kode_cpl.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.singkatan.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.deskripsi_id.toLowerCase().includes(searchTerm.toLowerCase());
+      c.deskripsi_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.deskripsi_en ?? '').toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchKurikulum = 
       filterKurikulum === 'all' || 
@@ -274,6 +275,7 @@ export default function CplManagementView({ sessionUser }: CplManagementViewProp
                       <th className="py-3 px-4 w-28">Kode CPL</th>
                       <th className="py-3 px-4 w-24">Singkatan</th>
                       <th className="py-3 px-4">Deskripsi (Indonesia)</th>
+                      <th className="py-3 px-4">Description (English)</th>
                       <th className="py-3 px-4 w-36">Domain</th>
                       <th className="py-3 px-4 w-32">Kurikulum</th>
                     </tr>
@@ -288,12 +290,8 @@ export default function CplManagementView({ sessionUser }: CplManagementViewProp
                             {cpl.singkatan}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 leading-relaxed">
-                          <p className="text-gray-900">{cpl.deskripsi_id}</p>
-                          {cpl.deskripsi_en && (
-                            <p className="text-xs text-gray-500 italic mt-0.5 font-sans">{cpl.deskripsi_en}</p>
-                          )}
-                        </td>
+                        <td className="py-3.5 px-4 leading-relaxed text-gray-900">{cpl.deskripsi_id}</td>
+                        <td className="py-3.5 px-4 leading-relaxed text-gray-500 italic">{cpl.deskripsi_en || '-'}</td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getDomainBadgeClass(cpl.domain)}`}>
                             {cpl.domain}

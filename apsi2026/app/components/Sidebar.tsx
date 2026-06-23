@@ -47,7 +47,6 @@ export default function Sidebar({
           })}
         </ul>
       </nav>
-      
       <div className="p-4 bg-slate-50 border-t border-slate-200 text-center mt-auto">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{brandFooter}</p>
         <p className="text-[9px] text-slate-400 font-medium mt-0.5">{copyrightFooter}</p>

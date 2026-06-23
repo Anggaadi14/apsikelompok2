@@ -7,10 +7,12 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 interface IkManagementViewProps { sessionUser: UserSession; }
 
 interface IkItem {
-  id_ik: number; id_cpl: number; kode_ik: string; deskripsi: string; urutan: number;
+  id_ik: number; id_cpl: number; kode_ik: string; deskripsi: string; deskripsi_en: string | null; urutan: number;
   kode_cpl: string; singkatan_cpl: string; id_kurikulum: number; kode_kurikulum: string;
 }
 interface CplOpt { id_cpl: number; id_kurikulum: number; kode_cpl: string; singkatan: string; domain: string; kode_kurikulum: string; kurikulum_active: number; }
+
+const KODE_IK_REGEX = /^[A-Za-z]+-[0-9]+$/;
 
 function authHeaders(): Record<string, string> {
   const raw = typeof window !== 'undefined' ? sessionStorage.getItem('currentUser') : null;
@@ -25,6 +27,7 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterKur, setFilterKur] = useState<string>('all');
   const [filterCpl, setFilterCpl] = useState<string>('all');
@@ -35,6 +38,7 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
   const [fIdCpl, setFIdCpl] = useState<string>('');
   const [fKode, setFKode] = useState('');
   const [fDesk, setFDesk] = useState('');
+  const [fDeskEn, setFDeskEn] = useState('');
   const [fUrutan, setFUrutan] = useState<number>(0);
 
   const fetchData = useCallback(async () => {
@@ -58,31 +62,37 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
       if (filterKur !== 'all' && r.kode_kurikulum !== filterKur) return false;
       if (filterCpl !== 'all' && String(r.id_cpl) !== filterCpl) return false;
       if (!q) return true;
-      return r.kode_ik.toLowerCase().includes(q) || r.deskripsi.toLowerCase().includes(q) || r.kode_cpl.toLowerCase().includes(q);
+      return r.kode_ik.toLowerCase().includes(q) || r.deskripsi.toLowerCase().includes(q) || (r.deskripsi_en ?? '').toLowerCase().includes(q) || r.kode_cpl.toLowerCase().includes(q);
     });
   }, [ikList, filterKur, filterCpl, search]);
 
   const openCreate = () => {
-    setEditId(null); setFIdCpl(''); setFKode(''); setFDesk(''); setFUrutan(0);
-    setShowModal(true); setError(null); setSuccess(null);
+    setEditId(null); setFIdCpl(''); setFKode(''); setFDesk(''); setFDeskEn(''); setFUrutan(0);
+    setShowModal(true); setError(null); setSuccess(null); setFormError(null);
   };
   const openEdit = (r: IkItem) => {
-    setEditId(r.id_ik); setFIdCpl(String(r.id_cpl)); setFKode(r.kode_ik); setFDesk(r.deskripsi); setFUrutan(r.urutan);
-    setShowModal(true); setError(null); setSuccess(null);
+    setEditId(r.id_ik); setFIdCpl(String(r.id_cpl)); setFKode(r.kode_ik); setFDesk(r.deskripsi); setFDeskEn(r.deskripsi_en || ''); setFUrutan(r.urutan);
+    setShowModal(true); setError(null); setSuccess(null); setFormError(null);
   };
   const closeModal = () => { if (!submitting) setShowModal(false); };
 
   const submit = async (e: FormEvent) => {
-    e.preventDefault(); setSubmitting(true); setError(null);
+    e.preventDefault(); setFormError(null);
+    const kodeTrimmed = fKode.trim();
+    if (!KODE_IK_REGEX.test(kodeTrimmed)) {
+      setFormError('Format Kode IK harus huruf-angka, contoh: IK-1.');
+      return;
+    }
+    setSubmitting(true);
     try {
-      const body = { id_cpl: Number(fIdCpl), kode_ik: fKode.trim(), deskripsi: fDesk.trim(), urutan: fUrutan };
+      const body = { id_cpl: Number(fIdCpl), kode_ik: kodeTrimmed, deskripsi: fDesk.trim(), deskripsi_en: fDeskEn.trim() || null, urutan: fUrutan };
       const url = editId ? `/api/admin/ik/${editId}` : '/api/admin/ik';
       const method = editId ? 'PATCH' : 'POST';
       const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
+      if (!res.ok || !json.success) setFormError(json.message || 'Gagal menyimpan.');
       else { setSuccess(json.message || 'Tersimpan.'); setShowModal(false); fetchData(); }
-    } catch { setError('Tidak dapat terhubung ke server.'); }
+    } catch { setFormError('Tidak dapat terhubung ke server.'); }
     finally { setSubmitting(false); }
   };
 
@@ -145,7 +155,8 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
                 <tr>
                   <th className="px-4 py-2 text-left w-28">Kode IK</th>
                   <th className="px-4 py-2 text-left w-40">CPL Induk</th>
-                  <th className="px-4 py-2 text-left">Deskripsi</th>
+                  <th className="px-4 py-2 text-left">Deskripsi (Indonesia)</th>
+                  <th className="px-4 py-2 text-left">Description (English)</th>
                   <th className="px-4 py-2 text-center w-20">Urutan</th>
                   <th className="px-4 py-2 text-right w-28">Aksi</th>
                 </tr>
@@ -159,6 +170,7 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
                       <span className="ml-1 text-xs text-gray-500">{r.kode_cpl} / {r.kode_kurikulum}</span>
                     </td>
                     <td className="px-4 py-2 text-gray-700">{r.deskripsi}</td>
+                    <td className="px-4 py-2 text-gray-500 italic">{r.deskripsi_en || '-'}</td>
                     <td className="px-4 py-2 text-center text-gray-600">{r.urutan}</td>
                     <td className="px-4 py-2 text-right">
                       <div className="inline-flex gap-1">
@@ -193,7 +205,13 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kode IK *</label>
-                  <input required type="text" maxLength={20} value={fKode} onChange={(e: ChangeEvent<HTMLInputElement>) => setFKode(e.target.value)} placeholder="IK-1" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
+                  <input
+                    required type="text" maxLength={20} value={fKode}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setFKode(e.target.value)}
+                    placeholder="IK-1"
+                    className={`w-full text-sm rounded-md shadow-sm ${fKode && !KODE_IK_REGEX.test(fKode.trim()) ? 'border-red-300 focus:border-red-400 focus:ring-red-200' : 'border-gray-300'}`}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Format: HURUF-ANGKA, contoh IK-1</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Urutan</label>
@@ -201,9 +219,14 @@ export default function IkManagementView({ sessionUser: _su }: IkManagementViewP
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi (Indonesia) *</label>
                 <textarea required rows={3} value={fDesk} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFDesk(e.target.value)} placeholder="Mampu mengidentifikasi…" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (English) <span className="text-gray-400 text-xs">(opsional)</span></label>
+                <textarea rows={2} value={fDeskEn} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFDeskEn(e.target.value)} placeholder="Able to identify…" className="w-full text-sm border-gray-300 rounded-md shadow-sm" />
+              </div>
+              {formError && <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-700"><AlertCircle className="w-5 h-5 flex-shrink-0" /> {formError}</div>}
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={closeModal} disabled={submitting} className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50">Batal</button>
                 <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium disabled:opacity-50">

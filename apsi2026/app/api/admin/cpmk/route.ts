@@ -79,6 +79,9 @@ export async function POST(req: NextRequest) {
     if (!kode_cpmk || kode_cpmk.length > 30) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Kode CPMK wajib (maks 30).' }, { status: 400 });
     }
+    if (!/^[A-Za-z]+-[0-9]+$/.test(kode_cpmk)) {
+      return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Format Kode CPMK harus huruf-angka, contoh: MO-1.' }, { status: 400 });
+    }
     if (!deskripsi_id) {
       return NextResponse.json({ success: false, error: 'BAD_REQUEST', message: 'Deskripsi (ID) wajib.' }, { status: 400 });
     }

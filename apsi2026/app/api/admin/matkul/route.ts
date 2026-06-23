@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     const { data: mkRows, error } = await admin
       .from('mata_kuliah')
-      .select('id_mata_kuliah, kode_mk, nama_mk, sks, singkatan')
+      .select('id_mata_kuliah, kode_mk, nama_mk, nama_mk_en, sks, singkatan')
       .order('kode_mk');
     if (error) throw error;
 
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const kode_mk = String(body?.kode_mk || '').trim();
     const nama_mk = String(body?.nama_mk || '').trim();
+    const nama_mk_en = body?.nama_mk_en ? String(body.nama_mk_en).trim() : null;
     const singkatan = body?.singkatan ? String(body.singkatan).trim() : null;
     const sks = Number(body?.sks);
     const links: Array<{ id_kurikulum: number; is_wajib?: number | boolean; semester_default?: number | null }> = Array.isArray(body?.links) ? body.links : [];
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     const { data: ins, error: insErr } = await admin
       .from('mata_kuliah')
-      .insert({ kode_mk, nama_mk, sks, singkatan })
+      .insert({ kode_mk, nama_mk, nama_mk_en, sks, singkatan })
       .select('id_mata_kuliah')
       .single();
     if (insErr) throw insErr;
