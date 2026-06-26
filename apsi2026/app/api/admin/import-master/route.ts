@@ -27,7 +27,13 @@ function numOr(v: unknown, def: number): number {
 }
 
 function readSheet(wb: XLSX.WorkBook, names: string[]): { header: string[]; rows: unknown[][] } | null {
-  const name = wb.SheetNames.find((n) => names.some((t) => n.toLowerCase().includes(t.toLowerCase())));
+  // Iterate names in priority order (most specific first) so e.g. "4. CPMK" is
+  // found before a sheet like "CPL- PI - CPMK" that also contains "CPMK".
+  let name: string | undefined;
+  for (const t of names) {
+    name = wb.SheetNames.find((n) => n.toLowerCase().includes(t.toLowerCase()));
+    if (name) break;
+  }
   if (!name) return null;
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: false, defval: null });
   let hi = aoa.findIndex((r) => Array.isArray(r) && s(r[0]).toLowerCase().startsWith('kode'));

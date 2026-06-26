@@ -30,9 +30,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'BAD_FILE', message: 'File tidak bisa dibaca. Pastikan format .xlsx/.xls.' }, { status: 400 });
     }
 
-    // Find the CPMK sheet by name; if not found, use the first sheet
+    // Prefer "4. CPMK" (exact numbered sheet) over "CPL- PI - CPMK" etc.
+    // Strategy: try each pattern in priority order, stop at first hit.
+    const patterns = [/^4\.\s*cpmk$/i, /^cpmk$/i, /\b4\.\s*cpmk\b/i, /(?<![a-z])cpmk(?![a-z])/i, /cpmk/i];
     const sheetName =
-      wb.SheetNames.find((n) => /cpmk/i.test(n)) ??
+      patterns.reduce<string | undefined>((found, re) => found ?? wb.SheetNames.find((n) => re.test(n)), undefined) ??
       wb.SheetNames[0];
 
     if (!sheetName) {
