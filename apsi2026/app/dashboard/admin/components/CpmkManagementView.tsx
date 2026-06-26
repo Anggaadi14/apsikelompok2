@@ -195,16 +195,18 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
               <tbody className="divide-y divide-gray-100">
                 {filtered.map((r: CpmkItem) => (
                   <tr key={r.id_cpmk} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-xs text-gray-800">{r.kode_cpmk}</td>
                     <td className="px-4 py-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs font-semibold text-gray-800">{r.kode_mk}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-semibold text-gray-800">{r.kode_cpmk}</span>
                         {r.is_evaluator_mk && (
-                          <span title="Mata Kuliah Evaluator">
+                          <span title="CPMK dari Mata Kuliah Evaluator">
                             <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="text-xs font-semibold text-gray-800">{r.kode_mk}</div>
                       <div className="text-xs text-gray-500">{r.nama_mk}</div>
                     </td>
                     <td className="px-4 py-2 text-gray-700">{r.deskripsi_id}</td>

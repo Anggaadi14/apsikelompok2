@@ -26,13 +26,25 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Fetch CPMK without is_evaluator in join (column may not exist in all DB versions)
     const { data: rows, error } = await admin
       .from('cpmk')
       .select(
         `id_cpmk, id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan,
-         mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan, is_evaluator )`,
+         mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan )`,
       );
     if (error) throw error;
+
+    // Fetch mkList with is_evaluator separately; fall back gracefully if column missing
+    const { data: mkListRaw } = await admin
+      .from('mata_kuliah')
+      .select('id_mata_kuliah, kode_mk, nama_mk, singkatan, sks, is_evaluator')
+      .order('kode_mk');
+    // Build evaluator lookup map (is_evaluator may be undefined if column doesn't exist)
+    const evalMap = new Map<number, boolean>();
+    for (const m of mkListRaw ?? []) {
+      evalMap.set(m.id_mata_kuliah, m.is_evaluator === true);
+    }
 
     let cpmkList = (rows ?? []).map((r: any) => ({
       id_cpmk: r.id_cpmk,
@@ -44,18 +56,14 @@ export async function GET(req: NextRequest) {
       kode_mk: r.mata_kuliah?.kode_mk,
       nama_mk: r.mata_kuliah?.nama_mk,
       singkatan_mk: r.mata_kuliah?.singkatan ?? null,
-      // is_evaluator may not exist in all DB versions — default false
-      is_evaluator_mk: r.mata_kuliah?.is_evaluator === true,
+      is_evaluator_mk: evalMap.get(r.id_mata_kuliah) ?? false,
     }));
     if (idMk) cpmkList = cpmkList.filter((r) => r.id_mata_kuliah === Number(idMk));
     if (kurMkIds) cpmkList = cpmkList.filter((r) => kurMkIds!.has(r.id_mata_kuliah));
     cpmkList.sort((a, b) => (a.kode_mk ?? '').localeCompare(b.kode_mk ?? '') || a.urutan - b.urutan || a.kode_cpmk.localeCompare(b.kode_cpmk));
 
-    const { data: mkList, error: mkErr } = await admin
-      .from('mata_kuliah')
-      .select('id_mata_kuliah, kode_mk, nama_mk, singkatan, sks')
-      .order('kode_mk');
-    if (mkErr) throw mkErr;
+    // mkList for dropdown (strip is_evaluator — not needed on frontend mkList)
+    const mkList = (mkListRaw ?? []).map(({ is_evaluator: _ie, ...m }: any) => m);
 
     return NextResponse.json({ success: true, data: { cpmkList, mkList } });
   } catch (err) {
