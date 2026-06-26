@@ -60,6 +60,20 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
     });
   }, [cpmkList, filterMk, search]);
 
+  // CPMK already exists for selected MK (shown in modal)
+  const cpmkForSelectedMk = useMemo(() => {
+    if (!fIdMk || editId) return [];
+    return cpmkList.filter(r => String(r.id_mata_kuliah) === fIdMk).sort((a, b) => a.urutan - b.urutan || a.kode_cpmk.localeCompare(b.kode_cpmk));
+  }, [cpmkList, fIdMk, editId]);
+
+  const handleMkChange = (idMk: string) => {
+    setFIdMk(idMk);
+    // Auto set next urutan
+    const existing = cpmkList.filter(r => String(r.id_mata_kuliah) === idMk);
+    const maxUrutan = existing.length > 0 ? Math.max(...existing.map(r => r.urutan)) : 0;
+    setFUrutan(maxUrutan + 1);
+  };
+
   const openCreate = () => { setEditId(null); setFIdMk(''); setFKode(''); setFDeskId(''); setFDeskEn(''); setFUrutan(0); setShowModal(true); setError(null); setSuccess(null); setFormError(null); };
   const openEdit = (r: CpmkItem) => { setEditId(r.id_cpmk); setFIdMk(String(r.id_mata_kuliah)); setFKode(r.kode_cpmk); setFDeskId(r.deskripsi_id); setFDeskEn(r.deskripsi_en || ''); setFUrutan(r.urutan); setShowModal(true); setError(null); setSuccess(null); setFormError(null); };
   const closeModal = () => { if (!submitting) setShowModal(false); };
@@ -224,11 +238,30 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
             <form onSubmit={submit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mata Kuliah *</label>
-                <select required value={fIdMk} onChange={(e: ChangeEvent<HTMLSelectElement>) => setFIdMk(e.target.value)} className="w-full text-sm border-gray-300 rounded-md shadow-sm">
+                <select required value={fIdMk} onChange={(e: ChangeEvent<HTMLSelectElement>) => handleMkChange(e.target.value)} className="w-full text-sm border-gray-300 rounded-md shadow-sm">
                   <option value="">-- Pilih Mata Kuliah --</option>
                   {mkList.map((m: MkOpt) => <option key={m.id_mata_kuliah} value={String(m.id_mata_kuliah)}>{m.kode_mk} — {m.nama_mk}</option>)}
                 </select>
               </div>
+
+              {/* Show existing CPMK for selected MK */}
+              {cpmkForSelectedMk.length > 0 && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-600 mb-2">CPMK yang sudah ada di MK ini ({cpmkForSelectedMk.length}):</p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {cpmkForSelectedMk.map(c => (
+                      <div key={c.id_cpmk} className="flex items-start gap-2 text-xs">
+                        <span className="font-mono font-semibold text-indigo-700 whitespace-nowrap">{c.kode_cpmk}</span>
+                        <span className="text-gray-600 truncate">{c.deskripsi_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {fIdMk && cpmkForSelectedMk.length === 0 && !editId && (
+                <p className="text-xs text-gray-400 -mt-2">Belum ada CPMK untuk MK ini.</p>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kode CPMK *</label>

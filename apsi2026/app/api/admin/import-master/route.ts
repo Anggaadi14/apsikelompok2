@@ -157,12 +157,20 @@ export async function POST(req: NextRequest) {
         if (!kodeCpmk) continue;
         const dId = s(r[2]); const dEn = s(r[3]) || null;
         if (!dId) { addRow(sec, baris, kodeCpmk, false, 'Deskripsi (Indonesia) kosong'); continue; }
+        if (!kodeMk) { addRow(sec, baris, kodeCpmk, false, 'Kode MK kosong'); continue; }
         const { data: mkR } = await admin.from('mata_kuliah').select('id_mata_kuliah').eq('kode_mk', kodeMk).maybeSingle();
-        if (!mkR) { addRow(sec, baris, kodeCpmk, false, `MK induk "${kodeMk}" tidak ditemukan`); continue; }
-        const { error } = await admin
-          .from('cpmk')
-          .upsert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 }, { onConflict: 'id_mata_kuliah,kode_cpmk' });
-        addRow(sec, baris, kodeCpmk, !error, error?.message);
+        if (!mkR) { addRow(sec, baris, kodeCpmk, false, `MK induk "${kodeMk}" tidak ditemukan di database`); continue; }
+        // Use check-then-insert/update to avoid dependency on DB unique constraint
+        const { data: existing } = await admin.from('cpmk').select('id_cpmk').eq('id_mata_kuliah', mkR.id_mata_kuliah).eq('kode_cpmk', kodeCpmk).maybeSingle();
+        let importErr: string | undefined;
+        if (existing) {
+          const { error: upErr } = await admin.from('cpmk').update({ deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 }).eq('id_cpmk', existing.id_cpmk);
+          importErr = upErr?.message;
+        } else {
+          const { error: insErr } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 });
+          importErr = insErr?.message;
+        }
+        addRow(sec, baris, kodeCpmk, !importErr, importErr);
       }
       sections.push(sec);
     }

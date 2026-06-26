@@ -39,12 +39,13 @@ export async function GET(req: NextRequest) {
       id_mata_kuliah: r.id_mata_kuliah,
       kode_cpmk: r.kode_cpmk,
       deskripsi_id: r.deskripsi_id,
-      deskripsi_en: r.deskripsi_en,
+      deskripsi_en: r.deskripsi_en ?? null,
       urutan: r.urutan,
       kode_mk: r.mata_kuliah?.kode_mk,
       nama_mk: r.mata_kuliah?.nama_mk,
-      singkatan_mk: r.mata_kuliah?.singkatan,
-      is_evaluator_mk: r.mata_kuliah?.is_evaluator ?? false,
+      singkatan_mk: r.mata_kuliah?.singkatan ?? null,
+      // is_evaluator may not exist in all DB versions — default false
+      is_evaluator_mk: r.mata_kuliah?.is_evaluator === true,
     }));
     if (idMk) cpmkList = cpmkList.filter((r) => r.id_mata_kuliah === Number(idMk));
     if (kurMkIds) cpmkList = cpmkList.filter((r) => kurMkIds!.has(r.id_mata_kuliah));
