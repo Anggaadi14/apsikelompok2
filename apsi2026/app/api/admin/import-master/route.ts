@@ -164,11 +164,24 @@ export async function POST(req: NextRequest) {
         const { data: existing } = await admin.from('cpmk').select('id_cpmk').eq('id_mata_kuliah', mkR.id_mata_kuliah).eq('kode_cpmk', kodeCpmk).maybeSingle();
         let importErr: string | undefined;
         if (existing) {
-          const { error: upErr } = await admin.from('cpmk').update({ deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 }).eq('id_cpmk', existing.id_cpmk);
-          importErr = upErr?.message;
+          const updPayload: Record<string, unknown> = { deskripsi_id: dId, urutan: i + 1 };
+          if (dEn !== null) updPayload.deskripsi_en = dEn;
+          const { error: upErr } = await admin.from('cpmk').update(updPayload).eq('id_cpmk', existing.id_cpmk);
+          if (upErr && /deskripsi_en|column/i.test(upErr.message ?? '')) {
+            const { error: upErr2 } = await admin.from('cpmk').update({ deskripsi_id: dId, urutan: i + 1 }).eq('id_cpmk', existing.id_cpmk);
+            importErr = upErr2?.message;
+          } else {
+            importErr = upErr?.message;
+          }
         } else {
           const { error: insErr } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 });
-          importErr = insErr?.message;
+          if (insErr && /deskripsi_en|column/i.test(insErr.message ?? '')) {
+            // Retry without deskripsi_en — column may not exist in this DB version
+            const { error: insErr2 } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, urutan: i + 1 });
+            importErr = insErr2?.message;
+          } else {
+            importErr = insErr?.message;
+          }
         }
         addRow(sec, baris, kodeCpmk, !importErr, importErr);
       }

@@ -44,6 +44,16 @@ const UPLOAD_TYPES: UploadType[] = [
     info: 'Urutan otomatis: CPL → IK (+ bobot ke CPL) → Mata Kuliah → CPMK → Mapping CPMK-IK.',
   },
   {
+    id: 'cpmk_only',
+    label: 'CPMK Saja',
+    desc: 'Import/update CPMK dari file Excel sederhana',
+    wired: true,
+    endpoint: '/api/admin/import-cpmk',
+    templateHref: '/templates/Template_CPMK.xlsx',
+    templateLabel: 'Template_CPMK.xlsx',
+    info: 'Sheet bisa dinamai apa saja (asalkan ada data). Kolom: Kode CPMK | Kode MK | Deskripsi (Indonesia) | Deskripsi (English). Mata Kuliah harus sudah diimport dulu. Kode MK harus sama persis dengan yang ada di database.',
+  },
+  {
     id: 'mahasiswa',
     label: 'Data Mahasiswa',
     desc: 'Upload daftar mahasiswa + enrollment kelas',
