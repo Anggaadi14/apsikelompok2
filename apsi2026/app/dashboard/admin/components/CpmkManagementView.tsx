@@ -1,14 +1,14 @@
 'use client';
 
 import { UserSession } from '../../../data/users';
-import { ListChecks, Plus, Search, Edit, Trash2, Loader2, AlertCircle, CheckCircle2, X, Filter } from 'lucide-react';
+import { ListChecks, Plus, Search, Edit, Trash2, Loader2, AlertCircle, CheckCircle2, X, Filter, Download, Star } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 
 interface CpmkManagementViewProps { sessionUser: UserSession; }
 
 interface CpmkItem {
   id_cpmk: number; id_mata_kuliah: number; kode_cpmk: string; deskripsi_id: string; deskripsi_en: string | null; urutan: number;
-  kode_mk: string; nama_mk: string; singkatan_mk: string | null;
+  kode_mk: string; nama_mk: string; singkatan_mk: string | null; is_evaluator_mk: boolean;
 }
 interface MkOpt { id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan: string | null; sks: number; }
 
@@ -93,6 +93,8 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
     else { setSuccess(json.message || 'Terhapus.'); fetchData(); }
   };
 
+  const evaluatorCount = useMemo(() => cpmkList.filter(r => r.is_evaluator_mk).length, [cpmkList]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -107,6 +109,39 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
           <Plus className="w-4 h-4" /> Tambah CPMK
         </button>
       </div>
+
+      {/* Template panel */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-blue-800">Template Import CPMK</p>
+          <p className="text-xs text-blue-600 mt-0.5">
+            Gunakan template Excel OBE (sheet "4. CPMK") untuk import massal via menu Upload Data Master.
+            <span className="ml-1 font-medium">Kolom: Kode CPMK · Kode MK · Deskripsi (Indonesia) · Deskripsi (English)</span>
+          </p>
+        </div>
+        <a
+          href="/templates/Template_Import_SICPL_KOSONG.xlsx"
+          download
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium whitespace-nowrap flex-shrink-0"
+        >
+          <Download className="w-4 h-4" /> Download Template
+        </a>
+      </div>
+
+      {/* Keterangan CPMK Evaluator */}
+      {evaluatorCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <Star className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">CPMK Evaluator</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Terdapat <strong>{evaluatorCount}</strong> CPMK yang berasal dari Mata Kuliah Evaluator
+              (ditandai dengan ikon <Star className="w-3 h-3 inline text-amber-600" />).
+              Mata Kuliah Evaluator adalah MK yang digunakan sebagai komponen penilaian akhir kompetensi mahasiswa.
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 text-sm text-red-700"><AlertCircle className="w-5 h-5 flex-shrink-0" /> {error}</div>}
       {success && <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-2 text-sm text-green-700"><CheckCircle2 className="w-5 h-5 flex-shrink-0" /> {success}</div>}
@@ -148,7 +183,14 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                   <tr key={r.id_cpmk} className="hover:bg-gray-50">
                     <td className="px-4 py-2 font-mono text-xs text-gray-800">{r.kode_cpmk}</td>
                     <td className="px-4 py-2">
-                      <span className="text-xs font-semibold text-gray-800">{r.kode_mk}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-gray-800">{r.kode_mk}</span>
+                        {r.is_evaluator_mk && (
+                          <span title="Mata Kuliah Evaluator">
+                            <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500">{r.nama_mk}</div>
                     </td>
                     <td className="px-4 py-2 text-gray-700">{r.deskripsi_id}</td>
@@ -164,6 +206,10 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+            Menampilkan {filtered.length} dari {cpmkList.length} CPMK.
+            {evaluatorCount > 0 && <span className="ml-2"><Star className="w-3 h-3 inline text-amber-500 fill-amber-400" /> = Mata Kuliah Evaluator</span>}
           </div>
         </div>
       )}

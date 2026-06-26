@@ -93,16 +93,25 @@ export async function POST(req: NextRequest) {
     const ikSheet = readSheet(wb, ['2. IK', 'IK']);
     if (ikSheet) {
       const sec: SectionResult = { sheet: 'IK', sukses: 0, gagal: 0, detail: [] };
+      // Detect header columns: support old format (kode,cpl,deskripsi,bobot) and
+      // new format (kode,cpl,deskripsi_id,deskripsi_en,bobot)
+      const hdr = ikSheet.header.map((h) => h.toLowerCase());
+      const colDeskEn = hdr.findIndex((h) => h.includes('english') || h.includes('inggris') || /\ben\b/.test(h));
+      const hasEnCol = colDeskEn >= 0 && colDeskEn !== 2;
       for (let i = 0; i < ikSheet.rows.length; i++) {
         const r = ikSheet.rows[i]; const baris = i + 1;
         const kodeIk = s(r[0]); const kodeCpl = s(r[1]);
         if (!kodeIk) continue;
-        const desk = s(r[2]); const bobot = numOr(r[3], 0);
+        const desk = s(r[2]);
+        // If header has deskripsi_en column, read it; otherwise r[3] is bobot
+        const deskEn = hasEnCol ? (s(r[colDeskEn]) || null) : null;
+        const botokIdx = hasEnCol ? (colDeskEn + 1 < r.length ? colDeskEn + 1 : 3) : 3;
+        const bobot = numOr(r[botokIdx], 0);
         const { data: cplR } = await admin.from('cpl').select('id_cpl').eq('id_kurikulum', idKurikulum).eq('kode_cpl', kodeCpl).maybeSingle();
         if (!cplR) { addRow(sec, baris, kodeIk, false, `CPL induk "${kodeCpl}" tidak ditemukan`); continue; }
         const { data: ikR, error: ikErr } = await admin
           .from('indikator_kinerja')
-          .upsert({ id_cpl: cplR.id_cpl, kode_ik: kodeIk, deskripsi: desk || kodeIk, urutan: i + 1 }, { onConflict: 'id_cpl,kode_ik' })
+          .upsert({ id_cpl: cplR.id_cpl, kode_ik: kodeIk, deskripsi: desk || kodeIk, deskripsi_en: deskEn, urutan: i + 1 }, { onConflict: 'id_cpl,kode_ik' })
           .select('id_ik')
           .single();
         if (ikErr || !ikR) { addRow(sec, baris, kodeIk, false, ikErr?.message); continue; }

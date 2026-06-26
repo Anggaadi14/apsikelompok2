@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       .from('cpmk')
       .select(
         `id_cpmk, id_mata_kuliah, kode_cpmk, deskripsi_id, deskripsi_en, urutan,
-         mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan )`,
+         mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan, is_evaluator )`,
       );
     if (error) throw error;
 
@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
       kode_mk: r.mata_kuliah?.kode_mk,
       nama_mk: r.mata_kuliah?.nama_mk,
       singkatan_mk: r.mata_kuliah?.singkatan,
+      is_evaluator_mk: r.mata_kuliah?.is_evaluator ?? false,
     }));
     if (idMk) cpmkList = cpmkList.filter((r) => r.id_mata_kuliah === Number(idMk));
     if (kurMkIds) cpmkList = cpmkList.filter((r) => kurMkIds!.has(r.id_mata_kuliah));
