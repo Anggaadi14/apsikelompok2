@@ -34,12 +34,16 @@ export type ObeFilter = {
 export async function resolveDashboardKurikulum(admin: AdminClient, kur?: string): Promise<number | null> {
   const clean = (kur ?? '').trim()
   if (clean && clean !== 'Semua') {
-    const { data } = await admin
-      .from('kurikulum')
-      .select('id_kurikulum')
-      .or(`kode.eq.${clean},id_kurikulum.eq.${Number(clean) || 0},tahun_mulai.eq.${Number(clean) || 0}`)
-      .maybeSingle()
-    if (data) return data.id_kurikulum
+    const numVal = Number(clean)
+    // Use separate .eq() calls to avoid raw string interpolation in .or()
+    const byKode = await admin.from('kurikulum').select('id_kurikulum').eq('kode', clean).maybeSingle()
+    if (byKode.data) return byKode.data.id_kurikulum
+    if (Number.isInteger(numVal) && numVal > 0) {
+      const byId = await admin.from('kurikulum').select('id_kurikulum').eq('id_kurikulum', numVal).maybeSingle()
+      if (byId.data) return byId.data.id_kurikulum
+      const byTahun = await admin.from('kurikulum').select('id_kurikulum').eq('tahun_mulai', numVal).order('tahun_mulai', { ascending: false }).limit(1).maybeSingle()
+      if (byTahun.data) return byTahun.data.id_kurikulum
+    }
   }
 
   const { data: active } = await admin
@@ -70,10 +74,13 @@ function cplNumber(label: string) {
 }
 
 function padCplChartRows(rows: Array<{ id: string; name: string; target: number; realisasi: number; deskripsi: string }>) {
+  if (rows.length === 0) return rows
   const byNumber = new Map(rows.map((row) => [cplNumber(row.id), row]))
+  const maxNo = Math.max(...Array.from(byNumber.keys()))
+  const padTo = Math.max(maxNo, rows.length)
   const defaultTarget = rows[0]?.target ?? 80
 
-  return Array.from({ length: 10 }, (_, idx) => {
+  return Array.from({ length: padTo }, (_, idx) => {
     const no = idx + 1
     return byNumber.get(no) ?? {
       id: `CPL-${no}`,
