@@ -55,20 +55,22 @@ export async function POST(req: NextRequest) {
 
     const { data: existing } = await admin.from('tahun_akademik').select('id_tahun_akademik, label, is_active').eq('kode', kode).maybeSingle();
 
-    if (setActive) {
-      await admin.from('tahun_akademik').update({ is_active: false }).eq('is_active', true);
-    }
-
     if (existing) {
-      await admin
+      const { error: updErr } = await admin
         .from('tahun_akademik')
         .update({ label: label ?? existing.label, is_active: setActive || existing.is_active })
         .eq('id_tahun_akademik', existing.id_tahun_akademik);
+      if (updErr) throw updErr;
     } else {
       const { error: insErr } = await admin
         .from('tahun_akademik')
         .insert({ kode, tahun_mulai: tahunMulai, tahun_selesai: tahunSelesai, semester, label, is_active: setActive });
       if (insErr) throw insErr;
+    }
+
+    // Deactivate others only after the upsert succeeds
+    if (setActive) {
+      await admin.from('tahun_akademik').update({ is_active: false }).eq('is_active', true).neq('kode', kode);
     }
 
     return NextResponse.json({ success: true, message: 'Tahun Akademik tersimpan.', data: { kode } });
