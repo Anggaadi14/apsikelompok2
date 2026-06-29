@@ -1,7 +1,7 @@
 'use client';
 
 import { UserSession } from '../../../data/users';
-import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, Edit3, Plus, ArrowLeft } from 'lucide-react';
+import { Network, Search, Loader2, AlertCircle, CheckCircle2, X, Filter, Save, Edit3, Plus, ArrowLeft, Star } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 
 interface MappingCpmkIkViewProps { sessionUser: UserSession; }
@@ -13,7 +13,7 @@ interface IkRow {
   jumlah_cpmk: number;
 }
 interface KurOpt { id_kurikulum: number; kode: string; nama: string; is_active: number; }
-interface CpmkRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; mapped: boolean; }
+interface CpmkRow { id_cpmk: number; kode_cpmk: string; deskripsi_id: string; id_mata_kuliah: number; kode_mk: string; nama_mk: string; singkatan_mk: string | null; is_evaluator: boolean; mapped: boolean; }
 interface IkDetail { id_ik: number; kode_ik: string; deskripsi: string; id_cpl: number; kode_cpl: string; singkatan_cpl: string; id_kurikulum: number; kode_kurikulum: string; }
 interface IkPickRow { id_ik: number; kode_ik: string; deskripsi: string; id_cpl: number; kode_cpl: string; singkatan_cpl: string; mapped: boolean; }
 interface MkOption { id_mata_kuliah: number; kode_mk: string; nama_mk: string; }
@@ -81,7 +81,7 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
       r.kode_ik.toLowerCase().includes(qq) ||
       r.deskripsi.toLowerCase().includes(qq) ||
       r.kode_cpl.toLowerCase().includes(qq) ||
-      r.singkatan_cpl.toLowerCase().includes(qq),
+      (r.singkatan_cpl ?? '').toLowerCase().includes(qq),
     );
   }, [ikList, search]);
 
@@ -98,16 +98,16 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
   const closeDetail = () => { if (!saving) { setShowDetail(false); setDetailIk(null); setDetailRows([]); } };
 
   const toggleMapped = (id_cpmk: number) => {
-    setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => r.id_cpmk === id_cpmk ? { ...r, mapped: !r.mapped } : r));
+    setDetailRows((prev: CpmkRow[]) => prev.map((r: CpmkRow) => r.id_cpmk === id_cpmk && r.is_evaluator ? { ...r, mapped: !r.mapped } : r));
   };
 
-  const selectedCount = useMemo(() => detailRows.filter((r: CpmkRow) => r.mapped).length, [detailRows]);
+  const selectedCount = useMemo(() => detailRows.filter((r: CpmkRow) => r.mapped && r.is_evaluator).length, [detailRows]);
 
   const save = async () => {
     if (!detailIk) return;
     setSaving(true); setError(null);
     try {
-      const id_cpmk_list = detailRows.filter((r: CpmkRow) => r.mapped).map((r: CpmkRow) => r.id_cpmk);
+      const id_cpmk_list = detailRows.filter((r: CpmkRow) => r.mapped && r.is_evaluator).map((r: CpmkRow) => r.id_cpmk);
       const res = await fetch('/api/admin/mapping-cpmk-ik', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id_ik: detailIk.id_ik, id_cpmk_list }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) setError(json.message || 'Gagal menyimpan.');
@@ -352,7 +352,11 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
           ) : (
             <>
               {detailIk && <div className="px-4 pt-3"><div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-xs text-indigo-900"><strong>Deskripsi IK:</strong> {detailIk.deskripsi}</div></div>}
-              <div className="px-4 pt-3 flex flex-wrap gap-2 justify-end items-center">
+              <div className="px-4 pt-3 flex flex-wrap gap-2 justify-between items-center">
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><Star className="w-3 h-3 text-amber-500 fill-amber-400" /> CPMK Evaluator (bisa dipetakan)</span>
+                  <span className="flex items-center gap-1 opacity-50">◻ CPMK non-evaluator (info saja)</span>
+                </div>
                 <div className="px-3 py-1.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                   {selectedCount} CPMK dipilih
                 </div>
@@ -369,18 +373,29 @@ export default function MappingCpmkIkView({ sessionUser: _su }: MappingCpmkIkVie
                     <table className="w-full text-sm">
                       <thead className="bg-white text-[10px] uppercase text-gray-500">
                         <tr>
-                          <th className="px-3 py-1 text-left w-24">Kode</th>
+                          <th className="px-3 py-1 text-left w-28">Kode</th>
                           <th className="px-3 py-1 text-left">Deskripsi</th>
                           <th className="px-3 py-1 text-center w-20">Dipetakan</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {g.rows.map((r: CpmkRow) => (
-                          <tr key={r.id_cpmk} className={r.mapped ? 'bg-indigo-50/40' : ''}>
-                            <td className="px-3 py-1.5 font-mono text-xs text-gray-800">{r.kode_cpmk}</td>
+                          <tr key={r.id_cpmk} className={r.is_evaluator ? (r.mapped ? 'bg-indigo-50/40' : '') : 'opacity-50 bg-gray-50'}>
+                            <td className="px-3 py-1.5">
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-xs text-gray-800">{r.kode_cpmk}</span>
+                                {r.is_evaluator && <Star className="w-3 h-3 text-amber-500 fill-amber-400 flex-shrink-0" />}
+                              </div>
+                            </td>
                             <td className="px-3 py-1.5 text-xs text-gray-700">{r.deskripsi_id}</td>
                             <td className="px-3 py-1.5 text-center">
-                              <input type="checkbox" checked={r.mapped} onChange={() => toggleMapped(r.id_cpmk)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                              <input
+                                type="checkbox"
+                                checked={r.mapped}
+                                disabled={!r.is_evaluator}
+                                onChange={() => toggleMapped(r.id_cpmk)}
+                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                              />
                             </td>
                           </tr>
                         ))}
