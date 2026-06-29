@@ -11,7 +11,7 @@ type TA = {
   kode: string;
   tahun_mulai: number;
   tahun_selesai: number;
-  semester: 'Ganjil' | 'Genap' | 'Pendek';
+  semester: 'Ganjil' | 'Genap';
   label: string | null;
   is_active: 0 | 1;
   created_at: string | null;
@@ -32,7 +32,7 @@ export default function TahunAkademikView({ sessionUser }: Props) {
   // Form tambah
   const thisYear = new Date().getFullYear();
   const [tahunMulai, setTahunMulai] = useState<number>(thisYear);
-  const [semester, setSemester] = useState<'Ganjil' | 'Genap' | 'Pendek'>('Ganjil');
+  const [semester, setSemester] = useState<'Ganjil' | 'Genap'>('Ganjil');
   const [label, setLabel] = useState('');
   const [setActive, setSetActive] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -120,12 +120,11 @@ export default function TahunAkademikView({ sessionUser }: Props) {
             <label className="block text-xs font-medium text-gray-700 mb-1">Semester</label>
             <select
               value={semester}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setSemester(e.target.value as 'Ganjil' | 'Genap' | 'Pendek')}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setSemester(e.target.value as 'Ganjil' | 'Genap')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="Ganjil">Ganjil</option>
               <option value="Genap">Genap</option>
-              <option value="Pendek">Pendek</option>
             </select>
           </div>
           <div className="md:col-span-2">
