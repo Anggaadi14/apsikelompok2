@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
       const { data: cpmkRows, error: cpmkErr } = mkIds.length
         ? await admin
             .from('cpmk')
-            .select('id_cpmk, kode_cpmk, deskripsi_id, id_mata_kuliah, urutan, mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan )')
+            .select('id_cpmk, kode_cpmk, deskripsi_id, id_mata_kuliah, urutan, mata_kuliah:id_mata_kuliah ( kode_mk, nama_mk, singkatan, is_evaluator )')
             .in('id_mata_kuliah', mkIds)
             .order('urutan')
             .order('kode_cpmk')
@@ -166,6 +166,7 @@ export async function GET(req: NextRequest) {
           kode_mk: c.mata_kuliah?.kode_mk,
           nama_mk: c.mata_kuliah?.nama_mk,
           singkatan_mk: c.mata_kuliah?.singkatan,
+          is_evaluator: c.mata_kuliah?.is_evaluator ?? false,
           mapped: mappedSet.has(c.id_cpmk),
         }))
         .sort((a: any, b: any) => (a.kode_mk ?? '').localeCompare(b.kode_mk ?? ''));
