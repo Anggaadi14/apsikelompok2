@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { UserSession } from '../../data/users';
-import { 
-  Users, Database, LayoutDashboard, Target, 
-  CheckSquare, ListChecks, BookOpen, MonitorPlay, 
-  GitMerge, Scale, UploadCloud, CalendarDays 
+import {
+  Users, Database, LayoutDashboard, Target,
+  CheckSquare, ListChecks, BookOpen, MonitorPlay,
+  GitMerge, Scale, UploadCloud, CalendarDays, Layers
 } from 'lucide-react';
 import AdminDashboardView from './components/AdminDashboardView';
 import UserManagementView from './components/UserManagementView';
@@ -22,6 +22,7 @@ import IkManagementView from './components/IkManagementView';
 import CpmkManagementView from './components/CpmkManagementView';
 import MatkulManagementView from './components/MatkulManagementView';
 import MappingCpmkIkView from './components/MappingCpmkIkView';
+import MappingAsesmenCpmkView from './components/MappingAsesmenCpmkView';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -60,6 +61,7 @@ export default function AdminDashboard() {
     { id: 'kelas', label: 'Kelola Kelas Tayang', icon: <MonitorPlay className="w-5 h-5" /> },
     { id: 'mapping', label: 'Mapping CPMK-IK', icon: <GitMerge className="w-5 h-5" /> },
     { id: 'bobot', label: 'Kelola Bobot IK', icon: <Scale className="w-5 h-5" /> },
+    { id: 'asesmen_cpmk', label: 'Mapping Asesmen', icon: <Layers className="w-5 h-5" /> },
   ];
 
   const handleLogout = () => {
@@ -102,6 +104,8 @@ export default function AdminDashboard() {
         return <MappingCpmkIkView sessionUser={sessionUser} />;
       case 'bobot':
         return <BobotIkCplView sessionUser={sessionUser} />;
+      case 'asesmen_cpmk':
+        return <MappingAsesmenCpmkView sessionUser={sessionUser} />;
       default:
         return <AdminDashboardView sessionUser={sessionUser} onNavigate={setActiveTab} />;
     }
