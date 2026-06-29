@@ -126,12 +126,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 7) Lookup mahasiswa enrolled di kelas, map NIM → id_mahasiswa
-    const { data: enrolled } = await admin
+    // Two-step: first get enrolled ids, then resolve NIM from mahasiswa table directly
+    const { data: enrolledRows } = await admin
       .from('mahasiswa_kelas')
-      .select('mahasiswa:id_mahasiswa ( id_mahasiswa, nim )')
+      .select('id_mahasiswa')
       .eq('id_kelas', idKelas);
+    const enrolledIds = (enrolledRows ?? []).map((r) => r.id_mahasiswa);
     const nimIndex = new Map<string, number>();
-    for (const m of (enrolled ?? []) as any[]) nimIndex.set(m.mahasiswa.nim.toUpperCase(), m.mahasiswa.id_mahasiswa);
+    if (enrolledIds.length > 0) {
+      const { data: mhsRows } = await admin
+        .from('mahasiswa')
+        .select('id_mahasiswa, nim')
+        .in('id_mahasiswa', enrolledIds);
+      for (const m of mhsRows ?? []) {
+        nimIndex.set(m.nim.trim().toUpperCase(), m.id_mahasiswa);
+      }
+    }
 
     // 8) Distribusi nilai
     const details: UploadDetail[] = [];
