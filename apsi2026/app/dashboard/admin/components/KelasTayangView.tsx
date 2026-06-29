@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   MonitorPlay, Plus, Pencil, Trash2, Users, X, Loader2, Search,
-  AlertCircle, CheckCircle2, UserPlus, Crown, RefreshCw,
+  AlertCircle, CheckCircle2, UserPlus, RefreshCw,
 } from 'lucide-react';
 
 type TA = {
@@ -92,7 +92,6 @@ export default function KelasTayangView() {
   const [pengampuList, setPengampuList] = useState<PengampuRow[]>([]);
   const [pengampuLoading, setPengampuLoading] = useState(false);
   const [pAddStaff, setPAddStaff] = useState<number | ''>('');
-  const [pAddPeran, setPAddPeran] = useState<'koordinator' | 'anggota'>('anggota');
 
   const fetchAll = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -244,7 +243,6 @@ export default function KelasTayangView() {
     setPengampuList([]);
     setPengampuLoading(true);
     setPAddStaff('');
-    setPAddPeran('anggota');
     try {
       const r = await fetch(`/api/admin/kelas/${k.id_kelas}/dosen?_=${Date.now()}`, {
         headers: authHeaders(),
@@ -265,30 +263,13 @@ export default function KelasTayangView() {
       const r = await fetch(`/api/admin/kelas/${showPengampu.id_kelas}/dosen`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ id_staff: pAddStaff, peran_di_kelas: pAddPeran }),
+        body: JSON.stringify({ id_staff: pAddStaff, peran_di_kelas: 'anggota' }),
       });
       const j = await r.json();
       if (!r.ok || !j.success) throw new Error(j.message ?? 'Gagal');
       await openPengampu(showPengampu);
       await fetchAll();
       setFlash({ type: 'ok', text: 'Pengampu disimpan.' });
-    } catch (e) {
-      setFlash({ type: 'err', text: e instanceof Error ? e.message : 'Gagal' });
-    }
-  };
-  const togglePeran = async (p: PengampuRow) => {
-    if (!showPengampu) return;
-    const next = p.peran_di_kelas === 'koordinator' ? 'anggota' : 'koordinator';
-    try {
-      const r = await fetch(`/api/admin/kelas/${showPengampu.id_kelas}/dosen`, {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ id_staff: p.id_staff, peran_di_kelas: next }),
-      });
-      const j = await r.json();
-      if (!r.ok || !j.success) throw new Error(j.message ?? 'Gagal');
-      await openPengampu(showPengampu);
-      await fetchAll();
     } catch (e) {
       setFlash({ type: 'err', text: e instanceof Error ? e.message : 'Gagal' });
     }
@@ -613,14 +594,6 @@ export default function KelasTayangView() {
                     </option>
                   ))}
                 </select>
-                <select
-                  value={pAddPeran}
-                  onChange={(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setPAddPeran(e.target.value as 'koordinator' | 'anggota')}
-                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white"
-                >
-                  <option value="anggota">Anggota</option>
-                  <option value="koordinator">Koordinator</option>
-                </select>
                 <button
                   onClick={addPengampu}
                   disabled={pAddStaff === ''}
@@ -645,31 +618,20 @@ export default function KelasTayangView() {
                   {pengampuList.map((p: PengampuRow) => (
                     <li key={p.id_staff} className="flex items-center justify-between p-3">
                       <div>
-                        <div className="font-medium text-gray-900 flex items-center gap-1">
-                          {p.peran_di_kelas === 'koordinator' && <Crown className="w-4 h-4 text-amber-500" />}
+                        <div className="font-medium text-gray-900">
                           {safe(p.nama_lengkap, `STAFF#${p.id_staff}`)}
-                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">{p.peran_di_kelas}</span>
                         </div>
                         <div className="text-xs text-gray-500">
                           {safe(p.email_sso, '-')} • NIP {safe(p.nip_nidn_nik, '-')}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          title={p.peran_di_kelas === 'koordinator' ? 'Jadikan Anggota' : 'Jadikan Koordinator'}
-                          onClick={() => togglePeran(p)}
-                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded"
-                        >
-                          <Crown className="w-4 h-4" />
-                        </button>
-                        <button
-                          title="Hapus dari kelas"
-                          onClick={() => removePengampu(p)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <button
+                        title="Hapus dari kelas"
+                        onClick={() => removePengampu(p)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </li>
                   ))}
                 </ul>
