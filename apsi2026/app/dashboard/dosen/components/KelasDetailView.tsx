@@ -230,7 +230,7 @@ export default function KelasDetailView({ sessionUser, idKelas, onBack }: KelasD
     setSaving(true);
     try {
       const raw = sessionStorage.getItem('currentUser') ?? '';
-      const res = await fetch(`/api/dosen/nilai/${editingCell.id_nilai ?? 'new'}`, {
+      const res = await fetch(`/api/dosen/nilai/${idKelas}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
