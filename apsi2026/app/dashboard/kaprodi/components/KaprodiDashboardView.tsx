@@ -3,9 +3,10 @@
 import { UserSession } from '../../../data/users';
 import {
   Target, CheckCircle2, XCircle, AlertTriangle,
-  FileWarning, Download, Filter, FileText, FileSpreadsheet, Image as ImageIcon
+  FileWarning, Download, Filter, FileText, FileSpreadsheet, Image as ImageIcon,
+  Pencil, X, Loader2, Save,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -30,6 +31,7 @@ interface KaprodiDashboardViewProps {
 
 type Option = { value: string; label: string };
 type CplChartRow = { id: string; name: string; target: number; realisasi: number; deskripsi?: string };
+type CplTargetRow = { id_cpl: number; kode_cpl: string; singkatan: string; target_minimal: number };
 type CriticalIk = { kode: string; nilai: number; target: number; deskripsi: string; cpl: string };
 type IncompleteClass = { id_kelas: number; label: string; status: string };
 type JsPdfWithAutoTable = { lastAutoTable?: { finalY?: number } };
@@ -73,6 +75,13 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetRows, setTargetRows] = useState<CplTargetRow[]>([]);
+  const [targetLoading, setTargetLoading] = useState(false);
+  const [targetSaving, setTargetSaving] = useState(false);
+  const [targetError, setTargetError] = useState('');
+  const [targetSuccess, setTargetSuccess] = useState('');
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -159,6 +168,43 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
     target: cpl.target,
     name: cpl.name,
   }));
+
+  const openTargetModal = async () => {
+    setShowTargetModal(true);
+    setTargetError('');
+    setTargetSuccess('');
+    setTargetLoading(true);
+    try {
+      const res = await fetch('/api/kaprodi/cpl-target', { headers: authHeaders(), cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || 'Gagal memuat data CPL.');
+      setTargetRows(json.data as CplTargetRow[]);
+    } catch (e) {
+      setTargetError(e instanceof Error ? e.message : 'Gagal memuat data.');
+    } finally {
+      setTargetLoading(false);
+    }
+  };
+
+  const saveTargets = async () => {
+    setTargetSaving(true);
+    setTargetError('');
+    setTargetSuccess('');
+    try {
+      const res = await fetch('/api/kaprodi/cpl-target', {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: targetRows.map((r) => ({ id_cpl: r.id_cpl, target_minimal: r.target_minimal })) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.message || 'Gagal menyimpan.');
+      setTargetSuccess(json.message || 'Target OBE berhasil disimpan.');
+    } catch (e) {
+      setTargetError(e instanceof Error ? e.message : 'Gagal menyimpan.');
+    } finally {
+      setTargetSaving(false);
+    }
+  };
 
   const handleDownloadPdf = async () => {
     setIsDownloadOpen(false);
@@ -285,7 +331,15 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
           <p className="text-gray-600 mt-1">Pemantauan Ketercapaian CPL & IK Program Studi {sessionUser.prodi}</p>
         </div>
 
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openTargetModal}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors font-medium text-sm shadow-sm"
+          >
+            <Pencil className="w-4 h-4" />
+            Edit Target OBE
+          </button>
+          <div className="relative">
           <button
             onClick={() => setIsDownloadOpen(!isDownloadOpen)}
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm shadow-sm"
@@ -311,6 +365,7 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
               </button>
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -477,6 +532,78 @@ export default function KaprodiDashboardView({ sessionUser }: KaprodiDashboardVi
           </div>
         </div>
       </div>
+
+      {/* Edit Target OBE Modal */}
+      {showTargetModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !targetSaving && setShowTargetModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Target className="w-5 h-5 text-indigo-600" /> Edit Target OBE
+              </h2>
+              <button onClick={() => setShowTargetModal(false)} disabled={targetSaving} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {targetLoading ? (
+                <div className="flex items-center justify-center py-10 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" /> Memuat data CPL…
+                </div>
+              ) : targetRows.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-8">Tidak ada data CPL pada kurikulum aktif.</p>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500 mb-4">Atur target minimal (0–100) untuk setiap CPL. Nilai ini digunakan sebagai acuan ketercapaian OBE.</p>
+                  {targetRows.map((row, i) => (
+                    <div key={row.id_cpl} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-gray-800">{row.kode_cpl}</span>
+                        {row.singkatan && <span className="text-xs text-gray-500 ml-2">{row.singkatan}</span>}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={row.target_minimal}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                            const next = [...targetRows];
+                            next[i] = { ...next[i], target_minimal: Number(e.target.value) };
+                            setTargetRows(next);
+                          }}
+                          className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <span className="text-xs text-gray-500">%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {targetError && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{targetError}</div>
+              )}
+              {targetSuccess && (
+                <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-700">{targetSuccess}</div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <button onClick={() => setShowTargetModal(false)} disabled={targetSaving} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                Tutup
+              </button>
+              <button
+                onClick={saveTargets}
+                disabled={targetSaving || targetLoading || targetRows.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {targetSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {targetSaving ? 'Menyimpan…' : 'Simpan Target'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
