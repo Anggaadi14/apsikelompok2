@@ -149,9 +149,9 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
           <div>
             <p className="text-sm font-semibold text-amber-800">CPMK Evaluator</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              Terdapat <strong>{evaluatorCount}</strong> CPMK yang berasal dari Mata Kuliah Evaluator
+              Terdapat <strong>{evaluatorCount}</strong> CPMK Evaluator
               (ditandai dengan ikon <Star className="w-3 h-3 inline text-amber-600" />).
-              Mata Kuliah Evaluator adalah MK yang digunakan sebagai komponen penilaian akhir kompetensi mahasiswa.
+              CPMK Evaluator adalah CPMK yang digunakan sebagai komponen penilaian akhir capaian pembelajaran mahasiswa.
             </p>
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
                       <div className="flex items-center gap-1.5">
                         <span className="font-mono text-xs font-semibold text-gray-800">{r.kode_cpmk}</span>
                         {r.is_evaluator_mk && (
-                          <span title="CPMK dari Mata Kuliah Evaluator">
+                          <span title="CPMK Evaluator">
                             <Star className="w-3 h-3 text-amber-500 fill-amber-400" />
                           </span>
                         )}
@@ -225,7 +225,7 @@ export default function CpmkManagementView({ sessionUser: _su }: CpmkManagementV
           </div>
           <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
             Menampilkan {filtered.length} dari {cpmkList.length} CPMK.
-            {evaluatorCount > 0 && <span className="ml-2"><Star className="w-3 h-3 inline text-amber-500 fill-amber-400" /> = Mata Kuliah Evaluator</span>}
+            {evaluatorCount > 0 && <span className="ml-2"><Star className="w-3 h-3 inline text-amber-500 fill-amber-400" /> = CPMK Evaluator</span>}
           </div>
         </div>
       )}
