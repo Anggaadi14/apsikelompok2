@@ -147,7 +147,8 @@ export async function POST(req: NextRequest) {
           .select('id_mata_kuliah')
           .single();
         if (mkErr || !mkR) { addRow(sec, baris, kodeMk, false, mkErr?.message); continue; }
-        await admin.from('kurikulum_mk').upsert({ id_kurikulum: idKurikulum, id_mata_kuliah: mkR.id_mata_kuliah, is_wajib: true }, { onConflict: 'id_kurikulum,id_mata_kuliah', ignoreDuplicates: true });
+        const { error: kurMkErr } = await admin.from('kurikulum_mk').upsert({ id_kurikulum: idKurikulum, id_mata_kuliah: mkR.id_mata_kuliah, is_wajib: true }, { onConflict: 'id_kurikulum,id_mata_kuliah', ignoreDuplicates: true });
+        if (kurMkErr) { addRow(sec, baris, kodeMk, false, `MK tersimpan tapi gagal link ke kurikulum: ${kurMkErr.message}`); continue; }
         addRow(sec, baris, kodeMk, true);
       }
       sections.push(sec);
@@ -162,12 +163,14 @@ export async function POST(req: NextRequest) {
         const kodeCpmk = s(r[0]); const kodeMk = s(r[1]);
         if (!kodeCpmk) continue;
         const dId = s(r[2]); const dEn = s(r[3]) || null;
+        const kodeAsesmen = s(r[4]) || null; // e.g. "UK1", "UK2"
         if (!dId) { addRow(sec, baris, kodeCpmk, false, 'Deskripsi (Indonesia) kosong'); continue; }
         if (!kodeMk) { addRow(sec, baris, kodeCpmk, false, 'Kode MK kosong'); continue; }
         const { data: mkR } = await admin.from('mata_kuliah').select('id_mata_kuliah').eq('kode_mk', kodeMk).maybeSingle();
         if (!mkR) { addRow(sec, baris, kodeCpmk, false, `MK induk "${kodeMk}" tidak ditemukan di database`); continue; }
         // Use check-then-insert/update to avoid dependency on DB unique constraint
         const { data: existing } = await admin.from('cpmk').select('id_cpmk').eq('id_mata_kuliah', mkR.id_mata_kuliah).eq('kode_cpmk', kodeCpmk).maybeSingle();
+        let idCpmk: number | null = existing?.id_cpmk ?? null;
         let importErr: string | undefined;
         if (existing) {
           const updPayload: Record<string, unknown> = { deskripsi_id: dId, urutan: i + 1 };
@@ -180,13 +183,41 @@ export async function POST(req: NextRequest) {
             importErr = upErr?.message;
           }
         } else {
-          const { error: insErr } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 });
+          const { data: inserted, error: insErr } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, deskripsi_en: dEn, urutan: i + 1 }).select('id_cpmk').single();
           if (insErr && /deskripsi_en|column/i.test(insErr.message ?? '')) {
             // Retry without deskripsi_en — column may not exist in this DB version
-            const { error: insErr2 } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, urutan: i + 1 });
+            const { data: ins2, error: insErr2 } = await admin.from('cpmk').insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_cpmk: kodeCpmk, deskripsi_id: dId, urutan: i + 1 }).select('id_cpmk').single();
             importErr = insErr2?.message;
+            idCpmk = ins2?.id_cpmk ?? null;
           } else {
             importErr = insErr?.message;
+            idCpmk = inserted?.id_cpmk ?? null;
+          }
+        }
+        if (!importErr && idCpmk && kodeAsesmen) {
+          // Upsert komponen_nilai for this MK + asesmen code
+          // Try to find existing komponen first; only insert if not found (preserve existing nama_media/bobot)
+          const { data: existingKomp } = await admin
+            .from('komponen_nilai')
+            .select('id_komponen')
+            .eq('id_mata_kuliah', mkR.id_mata_kuliah)
+            .eq('kode_media', kodeAsesmen)
+            .maybeSingle();
+          let kompR: { id_komponen: number } | null = existingKomp;
+          let kompErr: unknown = null;
+          if (!existingKomp) {
+            const res = await admin
+              .from('komponen_nilai')
+              .insert({ id_mata_kuliah: mkR.id_mata_kuliah, kode_media: kodeAsesmen, nama_media: kodeAsesmen, bobot_terhadap_mk: 0, urutan: Number(kodeAsesmen.replace(/\D/g, '')) || 0 })
+              .select('id_komponen')
+              .single();
+            kompR = res.data;
+            kompErr = res.error;
+          }
+          if (!kompErr && kompR) {
+            await admin
+              .from('mapping_media_cpmk')
+              .upsert({ id_komponen: kompR.id_komponen, id_cpmk: idCpmk, bobot_persen: 0 }, { onConflict: 'id_komponen,id_cpmk' });
           }
         }
         addRow(sec, baris, kodeCpmk, !importErr, importErr);
@@ -198,12 +229,19 @@ export async function POST(req: NextRequest) {
     const mapSheet = readSheet(wb, ['5. Mapping', 'Mapping']);
     if (mapSheet) {
       const sec: SectionResult = { sheet: 'Mapping CPMK-IK', sukses: 0, gagal: 0, detail: [] };
+      // Pre-load MK IDs in this kurikulum to scope CPMK lookup
+      const { data: kurMkForMap } = await admin.from('kurikulum_mk').select('id_mata_kuliah').eq('id_kurikulum', idKurikulum);
+      const mkIdsForMap = (kurMkForMap ?? []).map((r) => r.id_mata_kuliah);
+
       for (let i = 0; i < mapSheet.rows.length; i++) {
         const r = mapSheet.rows[i]; const baris = i + 1;
         const kodeCpmk = s(r[0]); const kodeIk = s(r[1]);
         if (!kodeCpmk && !kodeIk) continue;
         const label = `${kodeCpmk} -> ${kodeIk}`;
-        const { data: cpmkR } = await admin.from('cpmk').select('id_cpmk').eq('kode_cpmk', kodeCpmk).maybeSingle();
+        // Scope CPMK lookup to this kurikulum's MKs to avoid cross-MK code collisions
+        const cpmkQ = admin.from('cpmk').select('id_cpmk').eq('kode_cpmk', kodeCpmk);
+        const { data: cpmkResults } = mkIdsForMap.length ? await cpmkQ.in('id_mata_kuliah', mkIdsForMap) : await cpmkQ;
+        const cpmkR = cpmkResults?.[0] ?? null;
         const { data: ikR } = await admin
           .from('indikator_kinerja')
           .select('id_ik, cpl:id_cpl ( id_kurikulum )')
