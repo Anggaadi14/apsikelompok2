@@ -131,13 +131,40 @@ export async function POST(req: NextRequest) {
       const secEnr: SectionResult = { sheet: '2. Enrollment Kelas', sukses: 0, gagal: 0, detail: [] };
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(enrSheet, { defval: '' });
 
+      // Pre-load existing kelas
       const { data: allKelas } = await admin
         .from('kelas_mk')
-        .select('id_kelas, tahun_akademik, semester, kode_kelas, mata_kuliah:id_mata_kuliah ( kode_mk )');
+        .select('id_kelas, tahun_akademik, semester, kode_kelas, id_mata_kuliah, id_kurikulum, id_tahun_akademik, mata_kuliah:id_mata_kuliah ( kode_mk )');
       const kelasMap = new Map<string, number>();
       for (const k of (allKelas ?? []) as any[]) {
         const key = `${k.mata_kuliah?.kode_mk}|${k.tahun_akademik}|${k.semester}|${k.kode_kelas}`.toLowerCase();
         kelasMap.set(key, k.id_kelas);
+      }
+
+      // Pre-load lookups for auto-creation
+      const [{ data: mkRows }, { data: taRows }, { data: kurMkRows }] = await Promise.all([
+        admin.from('mata_kuliah').select('id_mata_kuliah, kode_mk'),
+        admin.from('tahun_akademik').select('id_tahun_akademik, tahun_mulai, tahun_selesai, semester'),
+        admin.from('kurikulum_mk').select('id_mata_kuliah, id_kurikulum, kurikulum:id_kurikulum( is_active )'),
+      ]);
+
+      const mkByCode = new Map<string, number>();
+      for (const mk of mkRows ?? []) mkByCode.set(mk.kode_mk.toLowerCase(), mk.id_mata_kuliah);
+
+      // "2024/2025|ganjil" → { id_tahun_akademik, semester }
+      const taByKey = new Map<string, { id_tahun_akademik: number; semester: string }>();
+      for (const ta of taRows ?? []) {
+        const key = `${ta.tahun_mulai}/${ta.tahun_selesai}|${ta.semester}`.toLowerCase();
+        taByKey.set(key, { id_tahun_akademik: ta.id_tahun_akademik, semester: ta.semester });
+      }
+
+      // id_mata_kuliah → id_kurikulum (prefer active)
+      const kurByMk = new Map<number, number>();
+      for (const r of (kurMkRows ?? []) as any[]) {
+        if (!kurByMk.has(r.id_mata_kuliah)) kurByMk.set(r.id_mata_kuliah, r.id_kurikulum);
+      }
+      for (const r of (kurMkRows ?? []) as any[]) {
+        if (r.kurikulum?.is_active) kurByMk.set(r.id_mata_kuliah, r.id_kurikulum);
       }
 
       for (let i = 0; i < rows.length; i++) {
@@ -166,12 +193,49 @@ export async function POST(req: NextRequest) {
           secEnr.detail.push({ baris, kode: label, status: 'gagal', catatan: `NIM ${nim} tidak ditemukan.` });
           secEnr.gagal++; continue;
         }
-        const key = `${kodeMk}|${ta}|${semester}|${kodeKelas}`.toLowerCase();
-        const idKelas = kelasMap.get(key);
+
+        const kelasKey = `${kodeMk}|${ta}|${semester}|${kodeKelas}`.toLowerCase();
+        let idKelas = kelasMap.get(kelasKey);
+
+        // Auto-create kelas if MK and TA exist but kelas belum dibuat
         if (!idKelas) {
-          secEnr.detail.push({ baris, kode: label, status: 'gagal', catatan: `Kelas ${kodeMk} ${ta} ${semester} ${kodeKelas} tidak ada (buat dulu via Kelola Kelas Tayang).` });
-          secEnr.gagal++; continue;
+          const idMk = mkByCode.get(kodeMk.toLowerCase());
+          const taData = taByKey.get(`${ta}|${semester}`.toLowerCase());
+          const idKur = idMk !== undefined ? kurByMk.get(idMk) : undefined;
+
+          if (idMk !== undefined && taData && idKur !== undefined) {
+            const { data: newKelas, error: newErr } = await admin
+              .from('kelas_mk')
+              .insert({
+                id_mata_kuliah: idMk,
+                id_kurikulum: idKur,
+                tahun_akademik: ta,
+                semester: taData.semester,
+                kode_kelas: kodeKelas,
+                id_tahun_akademik: taData.id_tahun_akademik,
+                kuota: null,
+              })
+              .select('id_kelas')
+              .single();
+            if (!newErr && newKelas?.id_kelas) {
+              idKelas = newKelas.id_kelas as number;
+              kelasMap.set(kelasKey, idKelas);
+            }
+          }
+
+          if (!idKelas) {
+            const mkExists = mkByCode.has(kodeMk.toLowerCase());
+            const taExists = taByKey.has(`${ta}|${semester}`.toLowerCase());
+            let catatan: string;
+            if (!mkExists) catatan = `MK ${kodeMk} belum ada — upload Data Master CPMK terlebih dahulu.`;
+            else if (!taExists) catatan = `Tahun Akademik "${ta} ${semester}" tidak ditemukan — buat dulu di menu Tahun Akademik.`;
+            else catatan = `Gagal membuat kelas otomatis untuk ${kodeMk} ${ta} ${semester} ${kodeKelas}.`;
+            secEnr.detail.push({ baris, kode: label, status: 'gagal', catatan });
+            secEnr.gagal++;
+            continue;
+          }
         }
+
         const { error } = await admin.from('mahasiswa_kelas').upsert({ id_kelas: idKelas, id_mahasiswa: idMhs }, { onConflict: 'id_kelas,id_mahasiswa', ignoreDuplicates: true });
         if (!error) {
           secEnr.detail.push({ baris, kode: label, status: 'sukses' });
