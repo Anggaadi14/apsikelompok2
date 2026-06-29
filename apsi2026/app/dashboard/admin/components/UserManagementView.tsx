@@ -420,7 +420,7 @@ function CreateUserModal(props: {
           <input value={nama} onChange={(e: ChangeEvent<HTMLInputElement>) => setNama(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="mis. Dr. Andi Wijaya, S.T., M.T." />
         </Field>
         <Field label="Email">
-          <input type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="mis. andi@uns.ac.id" />
+          <input type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder={role === 'mahasiswa' ? 'mis. F0221001@student.uns.ac.id' : 'nip@staff.uns.ac.id'} />
         </Field>
         {role === 'mahasiswa' ? (
           <div className="grid grid-cols-2 gap-3">
